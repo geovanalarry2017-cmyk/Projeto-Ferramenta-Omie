@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financeiro — DRE e Fluxo de Caixa</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.6/chart.umd.min.js"></script>
+<style>
+  :root {
+    --fundo: #f6f7f9;
+    --superficie: #ffffff;
+    --borda: #e3e6ea;
+    --texto: #1b1f24;
+    --suave: #5c6470;
+    --positivo: #14804a;
+    --negativo: #c0392b;
+    --destaque: #2b6cb0;
+    --aviso-fundo: #fff8e6;
+    --aviso-borda: #f0c674;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #14171c;
+      --superficie: #1c2027;
+      --borda: #2c323b;
+      --texto: #e7eaee;
+      --suave: #9aa4b2;
+      --positivo: #4ade80;
+      --negativo: #f87171;
+      --destaque: #7cb3f0;
+      --aviso-fundo: #322a12;
+      --aviso-borda: #7a6224;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--fundo); color: var(--texto);
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--suave); font-size: 13px; margin-bottom: 20px; }
+
+  .barra {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 10px; padding: 14px; margin-bottom: 18px;
+  }
+  .campo { display: flex; flex-direction: column; gap: 4px; }
+  .campo label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
+  input, select, button {
+    font: inherit; padding: 7px 10px;
+    border: 1px solid var(--borda); border-radius: 7px;
+    background: var(--fundo); color: var(--texto);
+  }
+  button {
+    background: var(--destaque); color: #fff; border-color: transparent;
+    cursor: pointer; font-weight: 600;
+  }
+  button:disabled { opacity: .55; cursor: progress; }
+
+  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; }
+  .cartao .rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
+  .cartao .valor { font-size: 22px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .painel { background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+  .painel h2 { font-size: 15px; margin: 0 0 12px; }
+  .grafico { position: relative; height: 300px; }
+
+  .rolagem { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tr.total { font-weight: 650; background: color-mix(in srgb, var(--destaque) 7%, transparent); }
+  tr.raiz { font-weight: 700; }
+  .pos { color: var(--positivo); }
+  .neg { color: var(--negativo); }
+  .zero { color: var(--suave); }
+
+  .aviso {
+    background: var(--aviso-fundo); border: 1px solid var(--aviso-borda);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;
+  }
+  .aviso h3 { margin: 0 0 6px; font-size: 14px; }
+  .aviso p { margin: 0 0 8px; font-size: 13px; }
+  .erro { border-color: var(--negativo); background: color-mix(in srgb, var(--negativo) 12%, transparent); }
+  .oculto { display: none; }
+  .vazio { color: var(--suave); padding: 28px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Financeiro</h1>
+  <div class="sub">DRE e fluxo de caixa a partir dos dados da Omie</div>
+
+  <div class="barra">
+    <div class="campo">
+      <label for="cliente">Cliente</label>
+      <select id="cliente"></select>
+    </div>
+    <div class="campo">
+      <label for="de">De</label>
+      <input type="date" id="de">
+    </div>
+    <div class="campo">
+      <label for="ate">Até</label>
+      <input type="date" id="ate">
+    </div>
+    <div class="campo">
+      <label for="regime">Regime</label>
+      <select id="regime">
+        <option value="caixa">Caixa (o que foi pago)</option>
+        <option value="competencia">Competência (o que foi faturado)</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label for="token">Token da API</label>
+      <input type="password" id="token" placeholder="X-API-Token" size="18">
+    </div>
+    <button id="carregar">Carregar</button>
+  </div>
+
+  <div id="erro" class="aviso erro oculto"></div>
+
+  <div class="cartoes">
+    <div class="cartao"><div class="rotulo">Receita líquida</div><div class="valor" id="c-receita">—</div></div>
+    <div class="cartao"><div class="rotulo">Despesas</div><div class="valor" id="c-despesa">—</div></div>
+    <div class="cartao"><div class="rotulo">Resultado</div><div class="valor" id="c-resultado">—</div></div>
+    <div class="cartao"><div class="rotulo">Saldo de caixa no período</div><div class="valor" id="c-caixa">—</div></div>
+  </div>
+
+  <div id="aviso-nao-classificado" class="aviso oculto">
+    <h3>Movimentos fora do DRE</h3>
+    <p id="texto-nao-classificado"></p>
+    <div class="rolagem"><table id="tabela-nao-classificado"></table></div>
+  </div>
+
+  <div class="painel">
+    <h2>Fluxo de caixa</h2>
+    <div class="grafico"><canvas id="g-caixa"></canvas></div>
+  </div>
+
+  <div class="painel">
+    <h2>Composição do resultado</h2>
+    <div class="grafico"><canvas id="g-dre"></canvas></div>
+  </div>
+
+  <div class="painel">
+    <h2>DRE</h2>
+    <div class="rolagem"><table id="tabela-dre"></table></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const moeda = (centavos) => brl.format((centavos ?? 0) / 100);
+const classeValor = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero');
+
+// O token fica só neste navegador; nunca é enviado a lugar nenhum além da
+// própria API. Evita redigitar a cada recarga.
+try { $('token').value = localStorage.getItem('omie.token') || ''; } catch {}
+
+function periodoPadrao() {
+  const hoje = new Date();
+  const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  $('de').value = iso(primeiro);
+  $('ate').value = iso(hoje);
+}
+periodoPadrao();
+
+async function api(caminho) {
+  const resposta = await fetch(caminho, { headers: { 'X-API-Token': $('token').value } });
+  const corpo = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(corpo.erro || `Erro ${resposta.status}`);
+  return corpo;
+}
+
+function mostrarErro(mensagem) {
+  $('erro').textContent = mensagem;
+  $('erro').classList.remove('oculto');
+}
+function limparErro() { $('erro').classList.add('oculto'); }
+
+async function carregarClientes() {
+  try {
+    const clientes = await api('/clientes');
+    $('cliente').innerHTML = clientes
+      .map((c) => `<option value="${c.slug}">${c.nome}</option>`)
+      .join('');
+    return clientes.length > 0;
+  } catch (e) {
+    mostrarErro(`Não foi possível listar os clientes: ${e.message}`);
+    return false;
+  }
+}
+
+// ---------- Tabela do DRE ----------
+
+function achatar(linhas, saida = []) {
+  for (const linha of linhas) {
+    saida.push(linha);
+    achatar(linha.filhos, saida);
+  }
+  return saida;
+}
+
+function renderizarDRE(dre) {
+  const linhas = achatar(dre.linhas);
+  const corpo = linhas
+    .map((l) => {
+      const recuo = (l.nivel - 1) * 18;
+      const classe = l.ehTotalizador ? (l.nivel === 1 ? 'raiz total' : 'total') : '';
+      return `<tr class="${classe}">
+        <td style="padding-left:${10 + recuo}px">${l.codigo}</td>
+        <td style="padding-left:${recuo}px">${l.descricao}</td>
+        <td class="num ${classeValor(l.valorCentavos)}">${moeda(l.valorCentavos)}</td>
+      </tr>`;
+    })
+    .join('');
+
+  $('tabela-dre').innerHTML = `
+    <thead><tr><th>Código</th><th>Conta</th><th class="num">Valor</th></tr></thead>
+    <tbody>${corpo}
+      <tr class="raiz total">
+        <td></td><td>Resultado do período</td>
+        <td class="num ${classeValor(dre.resultadoCentavos)}">${moeda(dre.resultadoCentavos)}</td>
+      </tr>
+    </tbody>`;
+}
+
+function renderizarNaoClassificado(dre) {
+  const { categorias, totalCentavos } = dre.naoClassificado;
+  const painel = $('aviso-nao-classificado');
+
+  if (categorias.length === 0) {
+    painel.classList.add('oculto');
+    return;
+  }
+
+  const d = dre.diagnostico;
+  $('texto-nao-classificado').textContent =
+    `${moeda(totalCentavos)} em ${categorias.length} categoria(s) não entrou no DRE porque ` +
+    `essas categorias não estão vinculadas a uma conta do DRE na Omie ` +
+    `(${d.categoriasComVinculoDRE} de ${d.categoriasTotais} categorias têm vínculo). ` +
+    `Para corrigir, vincule a categoria a uma conta do DRE no cadastro da Omie.`;
+
+  $('tabela-nao-classificado').innerHTML = `
+    <thead><tr><th>Categoria</th><th>Descrição</th><th class="num">Valor</th><th class="num">Movs.</th></tr></thead>
+    <tbody>${categorias
+      .map(
+        (c) => `<tr><td>${c.codigo}</td><td>${c.descricao}</td>
+          <td class="num">${moeda(c.valorCentavos)}</td><td class="num">${c.movimentos}</td></tr>`,
+      )
+      .join('')}</tbody>`;
+
+  painel.classList.remove('oculto');
+}
+
+// ---------- Gráficos ----------
+
+let graficoCaixa, graficoDre;
+
+const corDoTema = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--suave').trim();
+const bordaDoTema = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--borda').trim();
+
+function eixos() {
+  return {
+    x: { ticks: { color: corDoTema() }, grid: { color: bordaDoTema() } },
+    y: {
+      ticks: { color: corDoTema(), callback: (v) => brl.format(v / 100) },
+      grid: { color: bordaDoTema() },
+    },
+  };
+}
+
+function renderizarGraficoCaixa(fluxo) {
+  graficoCaixa?.destroy();
+
+  if (fluxo.dias.length === 0) {
+    $('g-caixa').parentElement.innerHTML = '<div class="vazio">Sem movimento no período.</div>';
+    return;
+  }
+
+  graficoCaixa = new Chart($('g-caixa'), {
+    data: {
+      labels: fluxo.dias.map((d) => d.data.slice(8) + '/' + d.data.slice(5, 7)),
+      datasets: [
+        { type: 'bar', label: 'Entradas', data: fluxo.dias.map((d) => d.entradasCentavos), backgroundColor: '#3fa06a' },
+        { type: 'bar', label: 'Saídas', data: fluxo.dias.map((d) => -d.saidasCentavos), backgroundColor: '#d1685c' },
+        {
+          type: 'line', label: 'Saldo acumulado',
+          data: fluxo.dias.map((d) => d.saldoAcumuladoCentavos),
+          borderColor: '#2b6cb0', backgroundColor: '#2b6cb0',
+          tension: 0.25, pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: corDoTema() } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${moeda(Math.abs(c.raw))}` } },
+      },
+      scales: eixos(),
+    },
+  });
+}
+
+function renderizarGraficoDRE(dre) {
+  graficoDre?.destroy();
+
+  // Nível 2 é o recorte que informa sem virar sopa de letrinhas: receita
+  // líquida, custos, despesas fixas e variáveis, investimentos.
+  const nivel2 = achatar(dre.linhas).filter((l) => l.nivel === 2 && l.valorCentavos !== 0);
+
+  if (nivel2.length === 0) {
+    $('g-dre').parentElement.innerHTML = '<div class="vazio">Sem valores apurados no período.</div>';
+    return;
+  }
+
+  graficoDre = new Chart($('g-dre'), {
+    type: 'bar',
+    data: {
+      labels: nivel2.map((l) => l.descricao),
+      datasets: [
+        {
+          label: 'Valor',
+          data: nivel2.map((l) => l.valorCentavos),
+          backgroundColor: nivel2.map((l) => (l.valorCentavos >= 0 ? '#3fa06a' : '#d1685c')),
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => moeda(c.raw) } },
+      },
+      scales: {
+        x: { ticks: { color: corDoTema(), callback: (v) => brl.format(v / 100) }, grid: { color: bordaDoTema() } },
+        y: { ticks: { color: corDoTema() }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+// ---------- Carregamento ----------
+
+function acharPorCodigo(linhas, codigo) {
+  for (const l of linhas) {
+    if (l.codigo === codigo) return l;
+    const achou = acharPorCodigo(l.filhos, codigo);
+    if (achou) return achou;
+  }
+  return null;
+}
+
+async function carregar() {
+  const slug = $('cliente').value;
+  const de = $('de').value;
+  const ate = $('ate').value;
+
+  if (!slug) return mostrarErro('Nenhum cliente selecionado.');
+  if (!de || !ate) return mostrarErro('Informe o período.');
+
+  try { localStorage.setItem('omie.token', $('token').value); } catch {}
+
+  limparErro();
+  $('carregar').disabled = true;
+  $('carregar').textContent = 'Carregando...';
+
+  try {
+    const q = `de=${de}&ate=${ate}`;
+    const [dre, fluxo] = await Promise.all([
+      api(`/clientes/${slug}/dre?${q}&regime=${$('regime').value}`),
+      api(`/clientes/${slug}/fluxo-caixa?${q}`),
+    ]);
+
+    const receita = acharPorCodigo(dre.linhas, '1.01');
+    const despesa = acharPorCodigo(dre.linhas, '2');
+
+    $('c-receita').textContent = moeda(receita?.valorCentavos ?? 0);
+    $('c-despesa').textContent = moeda(despesa?.valorCentavos ?? 0);
+    $('c-resultado').textContent = moeda(dre.resultadoCentavos);
+    $('c-resultado').className = 'valor ' + classeValor(dre.resultadoCentavos);
+    $('c-caixa').textContent = moeda(fluxo.saldoPeriodoCentavos);
+    $('c-caixa').className = 'valor ' + classeValor(fluxo.saldoPeriodoCentavos);
+
+    renderizarDRE(dre);
+    renderizarNaoClassificado(dre);
+    renderizarGraficoCaixa(fluxo);
+    renderizarGraficoDRE(dre);
+  } catch (e) {
+    mostrarErro(e.message);
+  } finally {
+    $('carregar').disabled = false;
+    $('carregar').textContent = 'Carregar';
+  }
+}
+
+$('carregar').addEventListener('click', carregar);
+
+carregarClientes().then((temCliente) => {
+  if (temCliente && $('token').value) carregar();
+});
+</script>
+</body>
+</html>

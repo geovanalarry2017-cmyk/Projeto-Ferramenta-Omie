@@ -10,8 +10,11 @@ import type {
   ListarContasReceberResponse,
   ListarExtratoRequest,
   ListarExtratoResponse,
+  ListarMovimentosRequest,
+  ListarMovimentosResponse,
   ListarTitulosRequest,
   MovimentoExtrato,
+  MovimentoFinanceiro,
   TituloCadastro,
 } from './types.js';
 
@@ -85,6 +88,60 @@ export async function listarExtrato(
     }
     throw erro;
   }
+}
+
+/**
+ * Movimentos financeiros do periodo (contas a pagar, a receber e conta corrente).
+ *
+ * E a fonte do DRE e do fluxo de caixa: cada movimento traz a categoria, o
+ * valor pago e as datas, que e o necessario para classificar nas linhas do DRE.
+ *
+ * @param porPagamento true = filtra pela data de pagamento (regime de caixa);
+ *                     false = pela data de emissao (competencia).
+ */
+export async function listarMovimentos(
+  credenciais: CredenciaisOmie,
+  de: DataISO,
+  ate: DataISO,
+  porPagamento = true,
+): Promise<MovimentoFinanceiro[]> {
+  const movimentos: MovimentoFinanceiro[] = [];
+  let pagina = 1;
+  let totalDePaginas = 1;
+
+  const filtroDeData = porPagamento
+    ? { dDtPagtoDe: paraFormatoOmie(de), dDtPagtoAte: paraFormatoOmie(ate) }
+    : { dDtEmisDe: paraFormatoOmie(de), dDtEmisAte: paraFormatoOmie(ate) };
+
+  do {
+    let resposta: ListarMovimentosResponse;
+    try {
+      resposta = await chamarOmie<ListarMovimentosResponse, ListarMovimentosRequest>(
+        credenciais,
+        'financas/mf',
+        'ListarMovimentos',
+        {
+          nPagina: pagina,
+          nRegPorPagina: 200,
+          // Titulo cancelado nao e receita nem despesa; deixa-lo entrar
+          // inflaria o DRE com dinheiro que nunca existiu.
+          cStatus: 'NAO_CANCELADO',
+          ...filtroDeData,
+        },
+      );
+    } catch (erro) {
+      if (ehRespostaVazia(erro)) break;
+      throw erro;
+    }
+
+    movimentos.push(...(resposta.movimentos ?? []));
+    totalDePaginas = resposta.nTotPaginas ?? 1;
+    pagina += 1;
+  } while (pagina <= totalDePaginas);
+
+  logger.debug({ de, ate, porPagamento, total: movimentos.length }, 'movimentos financeiros lidos');
+
+  return movimentos;
 }
 
 async function listarTitulosPaginado(

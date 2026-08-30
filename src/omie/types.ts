@@ -133,3 +133,119 @@ export interface ListarContasPagarResponse {
   total_de_registros: number;
   conta_pagar_cadastro?: TituloCadastro[];
 }
+
+// ---------- /geral/dre/ : ListarCadastroDRE ----------
+
+export interface ContaDRE {
+  codigoDRE: string;
+  descricaoDRE: string;
+  /** Profundidade na hierarquia; casa com a quantidade de segmentos do codigo. */
+  nivelDRE: number;
+  /** "+" soma, "-" subtrai, vazio nos totalizadores. */
+  sinalDRE: string;
+  /** "S" = linha calculada a partir dos filhos; "N" = linha que recebe valor. */
+  totalizaDRE: string;
+  naoExibirDRE: string;
+}
+
+export interface ListarCadastroDREResponse {
+  totalRegistros?: number;
+  dreLista?: ContaDRE[];
+}
+
+// ---------- /geral/categorias/ : ListarCategorias ----------
+
+export interface Categoria {
+  codigo: string;
+  descricao?: string;
+  descricao_padrao?: string;
+  categoria_superior?: string;
+  /**
+   * Codigo da conta do DRE. E O UNICO vinculo valido entre categoria e DRE:
+   * os dois usam numeracao parecida mas independente, e o mesmo codigo
+   * significa coisas diferentes de cada lado.
+   */
+  codigo_dre?: string;
+  dadosDRE?: Partial<ContaDRE>;
+  conta_receita?: string;
+  conta_despesa?: string;
+  conta_inativa?: string;
+  /** "S" = grupo que so agrega; nao recebe lancamento. */
+  totalizadora?: string;
+  nao_exibir?: string;
+  transferencia?: string;
+}
+
+export interface ListarCategoriasResponse {
+  pagina?: number;
+  total_de_paginas?: number;
+  registros?: number;
+  total_de_registros?: number;
+  categoria_cadastro?: Categoria[];
+}
+
+// ---------- /financas/mf/ : ListarMovimentos ----------
+
+export interface MovimentoDetalhes {
+  nCodTitulo?: number;
+  cNumTitulo?: string;
+  dDtEmissao?: string;
+  dDtVenc?: string;
+  dDtPagamento?: string;
+  nCodCliente?: number;
+  cCPFCNPJCliente?: string;
+  nCodCC?: number;
+  cStatus?: string;
+  /** "P" = a pagar, "R" = a receber. */
+  cNatureza?: string;
+  cTipo?: string;
+  cCodCateg?: string;
+  nValorTitulo?: number;
+  observacao?: string;
+  cOrigem?: string;
+}
+
+export interface MovimentoResumo {
+  nValPago?: number;
+  nValAberto?: number;
+  nValLiquido?: number;
+  nDesconto?: number;
+  nJuros?: number;
+  nMulta?: number;
+  /** "S" quando o titulo ja foi liquidado. */
+  cLiquidado?: string;
+}
+
+/** Rateio do titulo entre categorias. Um titulo pode se dividir em varias. */
+export interface MovimentoCategoria {
+  cCodCateg?: string;
+  nDistrValor?: number;
+  nDistrPercentual?: number;
+}
+
+export interface MovimentoFinanceiro {
+  detalhes?: MovimentoDetalhes;
+  resumo?: MovimentoResumo;
+  categorias?: MovimentoCategoria[];
+}
+
+export interface ListarMovimentosRequest {
+  nPagina: number;
+  nRegPorPagina: number;
+  cNatureza?: 'P' | 'R';
+  cStatus?: string;
+  dDtPagtoDe?: string;
+  dDtPagtoAte?: string;
+  dDtEmisDe?: string;
+  dDtEmisAte?: string;
+  cTpLancamento?: string;
+  lApenasResumo?: boolean;
+}
+
+export interface ListarMovimentosResponse {
+  nPagina?: number;
+  nTotPaginas?: number;
+  nRegistros?: number;
+  nTotRegistros?: number;
+  movimentos?: MovimentoFinanceiro[];
+}

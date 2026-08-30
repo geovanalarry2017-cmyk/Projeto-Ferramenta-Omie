@@ -1,65 +1,16 @@
-import { Router, type NextFunction, type Request, type Response } from 'express';
-import { buscarPorSlug, listarClientes } from '../../clientes/repository.js';
-import type { ClienteResumo } from '../../clientes/types.js';
-import { env } from '../../config/env.js';
+import { Router, type Request, type Response } from 'express';
+import { listarClientes } from '../../clientes/repository.js';
 import { ehDataISO } from '../../lib/dates.js';
-import { compararSegredos } from '../../lib/cripto.js';
 import { logger } from '../../lib/logger.js';
 import { executarConciliacao, janelaPadrao } from '../../conciliacao/service.js';
 import { buscarExecucao, listarExecucoes, listarItens } from '../../db/repository.js';
+import {
+  exigirToken,
+  resolverCliente,
+  type RequisicaoComCliente,
+} from '../middleware.js';
 
 export const rotasConciliacao = Router();
-
-/** O cliente resolvido pela rota, anexado a requisicao. */
-interface RequisicaoComCliente extends Request {
-  cliente?: ClienteResumo;
-}
-
-/**
- * A conciliacao le dados financeiros e roda por minutos. Deixar o disparo
- * aberto seria convite a abuso, entao exige um token compartilhado.
- * Nao substitui autenticacao de verdade — e o minimo para nao expor o endpoint.
- */
-function exigirToken(req: Request, res: Response, next: NextFunction): void {
-  const token = req.header('x-api-token');
-
-  // Comparacao em tempo constante: `!==` vazaria, pelo tempo de resposta,
-  // quantos caracteres iniciais bateram.
-  if (!token || !compararSegredos(token, env.API_TOKEN)) {
-    res.status(401).json({ erro: 'Token invalido ou ausente no header X-API-Token.' });
-    return;
-  }
-  next();
-}
-
-/**
- * Resolve :cliente (slug) e anexa a requisicao.
- *
- * Toda rota de dados passa por aqui. Com varios clientes no mesmo banco, uma
- * consulta que nao filtre por cliente entrega dado financeiro de um cliente
- * para outro.
- */
-async function resolverCliente(
-  req: RequisicaoComCliente,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  // No Express 5 um parametro de rota pode chegar como array; so string serve.
-  const slug = req.params.cliente;
-  if (typeof slug !== 'string' || slug.length === 0) {
-    res.status(400).json({ erro: 'Cliente nao informado na rota.' });
-    return;
-  }
-
-  const cliente = await buscarPorSlug(slug);
-  if (!cliente) {
-    res.status(404).json({ erro: `Cliente "${slug}" nao encontrado.` });
-    return;
-  }
-
-  req.cliente = cliente;
-  next();
-}
 
 rotasConciliacao.get(
   '/clientes',

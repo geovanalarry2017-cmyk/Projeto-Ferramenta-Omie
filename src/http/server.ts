@@ -1,7 +1,15 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { pool } from '../db/pool.js';
 import { rotasConciliacao } from './routes/conciliacao.js';
+import { rotasDashboard } from './routes/dashboard.js';
+
+// Em dev roda de src/http/, compilado roda de dist/http/ — os dois sobem dois
+// niveis ate a raiz do projeto, onde fica public/.
+const AQUI = dirname(fileURLToPath(import.meta.url));
+const PASTA_PUBLICA = join(AQUI, '..', '..', 'public');
 
 /**
  * Falha de conexao do `pg` costuma chegar como AggregateError de mensagem
@@ -46,6 +54,11 @@ export function criarServidor() {
   });
 
   app.use(rotasConciliacao);
+  app.use(rotasDashboard);
+
+  // O dashboard e servido pelo mesmo processo: uma peca a menos para hospedar,
+  // e sem CORS para configurar.
+  app.use(express.static(PASTA_PUBLICA));
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ erro: 'Rota nao encontrada.' });

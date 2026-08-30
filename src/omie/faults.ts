@@ -10,24 +10,37 @@ export function ehFalhaDeConsumo(corpo: string): boolean {
 }
 
 /**
- * A Omie bloqueia a repeticao da MESMA chamada com os MESMOS parametros dentro
- * de uma janela curta ("Consumo redundante detectado. Aguarde N segundos"), e
- * manda isso com HTTP 200 + faultstring — nao com 429.
+ * A Omie tem dois bloqueios temporarios que chegam como erro de aplicacao, e
+ * nao como 429 — ora com HTTP 200 e faultstring, ora com HTTP 500:
  *
- * Isso atinge o conciliador em cheio: reprocessar o mesmo periodo e operacao
- * normal aqui (o job diario reexecuta uma janela de dias, e a calibracao roda
- * o mesmo intervalo varias vezes seguidas).
+ * 1. "Consumo redundante detectado. Aguarde N segundos" — mesma chamada com os
+ *    mesmos parametros repetida numa janela curta. Atinge o projeto em cheio:
+ *    reprocessar o mesmo periodo e operacao normal aqui (o job diario reexecuta
+ *    uma janela de dias, e a calibracao roda o mesmo intervalo varias vezes).
+ *
+ * 2. "Ja existe uma requisicao desse metodo sendo executada" — trava de
+ *    concorrencia por metodo. Acontece tambem quando um processo morre no meio
+ *    de uma chamada: a Omie segue considerando a requisicao em andamento por um
+ *    tempo, e a proxima execucao esbarra nela.
+ *
+ * Os dois passam com o tempo, entao valem retentativa — desde que com a espera
+ * certa, nao com o backoff generico de um segundo.
  *
  * @returns segundos a esperar, ou null se a falha for de outra natureza.
  */
-export function esperaPorConsumoRedundante(mensagem: string): number | null {
-  if (!/redundante|REDUNDANT/i.test(mensagem)) return null;
+export function esperaPorBloqueioTemporario(mensagem: string): number | null {
+  if (/redundante|REDUNDANT/i.test(mensagem)) {
+    // A propria mensagem diz quantos segundos faltam; usar o numero dela evita
+    // tanto esperar demais quanto voltar cedo e levar o bloqueio de novo.
+    const m = /aguarde\s+(\d+)\s*segundo/i.exec(mensagem);
+    const segundos = m ? Number(m[1]) : 15;
+    return (Number.isFinite(segundos) ? segundos : 15) + 1;
+  }
 
-  // A propria mensagem diz quantos segundos faltam; usar o numero dela evita
-  // tanto esperar demais quanto voltar cedo e levar o bloqueio de novo.
-  const m = /aguarde\s+(\d+)\s*segundo/i.exec(mensagem);
-  const segundos = m ? Number(m[1]) : 15;
-  return (Number.isFinite(segundos) ? segundos : 15) + 1;
+  // Esta nao informa quanto esperar; alguns segundos costumam bastar.
+  if (/j[aá] existe uma requisi[cç][aã]o desse m[eé]todo/i.test(mensagem)) return 8;
+
+  return null;
 }
 
 /**

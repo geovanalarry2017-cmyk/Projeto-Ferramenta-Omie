@@ -115,9 +115,46 @@ escopada por cliente.
 | `POST /clientes/:cliente/conciliacao/executar` | Dispara. Corpo opcional `{"de":"AAAA-MM-DD","ate":"AAAA-MM-DD"}`. Responde **202** e processa em background. |
 | `GET /clientes/:cliente/conciliacao` | Últimas execuções do cliente. |
 | `GET /clientes/:cliente/conciliacao/:id` | Detalhe. Aceita `?status=REVISAR`. |
+| `GET /clientes/:cliente/dre` | DRE do período. `?de=&ate=&regime=caixa\|competencia`. |
+| `GET /clientes/:cliente/fluxo-caixa` | Entradas, saídas e saldo acumulado por dia. `?de=&ate=`. |
+| `POST /clientes/:cliente/cadastros/recarregar` | Descarta o cache do plano de contas (10 min). |
+
+O dashboard em si é servido na raiz (`/`) pelo mesmo processo.
 
 Pedir uma execução de outro cliente devolve **404**, não os dados dele: a
 consulta filtra por `cliente_id`, não só pelo id da execução.
+
+## Dashboard de DRE
+
+Acesse `/` com o servidor no ar. Escolha cliente, período e regime.
+
+**Regime de caixa** conta o que foi efetivamente pago (`nValPago`, data de
+pagamento). **Competência** conta o que foi faturado (`nValorTitulo`, data de
+emissão). Um título de R$ 1.000 com R$ 400 pagos aparece como 400 no caixa e
+1.000 na competência.
+
+### A armadilha do vínculo categoria → DRE ⚠️
+
+Categoria e conta do DRE usam **numerações parecidas e independentes**. Na conta
+de teste, `1.01.02` é *"Clientes - Serviços Prestados"* como categoria e
+*"Impostos"* como conta do DRE. Usar o código da categoria como se fosse o do
+DRE colocaria receita na linha de imposto — e ela seria **subtraída**, calada.
+
+O único vínculo válido é o campo `codigo_dre` da categoria, e ele é opcional na
+Omie. Na conta de teste, **49 de 142** categorias têm o vínculo preenchido.
+
+Por isso o DRE nunca descarta o que não consegue classificar: movimentos de
+categorias sem vínculo aparecem no painel **"Movimentos fora do DRE"**, com
+valor e quantidade. *Um DRE que fecha escondendo dinheiro é pior que um que
+avisa estar incompleto.* Para corrigir, vincule a categoria a uma conta do DRE
+no cadastro da Omie.
+
+### Como o sinal funciona
+
+Vem da própria Omie: folhas (`totalizaDRE = "N"`) têm `sinalDRE` `+` ou `-`;
+totalizadores valem a soma dos filhos, que já chegam assinados. Assim "Custos"
+(filhos todos `-`) vira negativo e `Lucro Bruto = Receita + Receita Indireta +
+Custos` fecha somando, sem regra especial em lugar nenhum.
 
 ## Calibração
 

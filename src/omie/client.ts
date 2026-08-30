@@ -1,11 +1,11 @@
-import type { CredenciaisOmie } from '../clientes/types.js';
+﻿import type { CredenciaisOmie } from '../clientes/types.js';
 import { env } from '../config/env.js';
 import { ErroHttp, requisitar } from '../lib/http.js';
 import { logger } from '../lib/logger.js';
 import {
   ehFalhaDeConsumo,
   ehMensagemDeListaVazia,
-  esperaPorConsumoRedundante,
+  esperaPorBloqueioTemporario,
 } from './faults.js';
 
 /**
@@ -119,12 +119,12 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
           {
             timeoutMs: 60_000,
             tentativas: 3,
-            // Consumo redundante fica de FORA da retentativa do nivel HTTP: o
+            // Bloqueio temporario fica de FORA da retentativa do nivel HTTP: o
             // backoff generico dela (1s, 2s, 4s) e curto demais para a janela
             // que a Omie pede (dezenas de segundos), e so gastaria as
             // tentativas antes de o tratamento correto entrar em acao.
             ehRetentavel: (status, corpo) =>
-              esperaPorConsumoRedundante(corpo) === null &&
+              esperaPorBloqueioTemporario(corpo) === null &&
               (status === 429 || (status >= 500 && ehFalhaDeConsumo(corpo)) || status >= 502),
           },
         );
@@ -134,14 +134,14 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
           const mensagem =
             falha?.faultstring ?? `Omie respondeu HTTP ${erro.status} em ${metodo}`;
 
-          // A mesma falha de consumo redundante chega ora como HTTP 200 com
-          // faultstring, ora como HTTP 500. Tratar so um dos caminhos deixa o
-          // outro passar direto — foi o que aconteceu na primeira versao.
-          const espera = esperaPorConsumoRedundante(erro.corpo);
+          // O mesmo bloqueio chega ora como HTTP 200 com faultstring, ora como
+          // HTTP 500. Tratar so um dos caminhos deixa o outro passar direto —
+          // foi o que aconteceu na primeira versao.
+          const espera = esperaPorBloqueioTemporario(erro.corpo);
           if (espera !== null && tentativa < TENTATIVAS) {
             logger.warn(
-              { recurso, metodo, tentativa, esperaSegundos: espera, status: erro.status },
-              'consumo redundante na Omie, aguardando a janela liberar',
+              { recurso, metodo, tentativa, esperaSegundos: espera, status: erro.status, motivo: mensagem },
+              'bloqueio temporario na Omie, aguardando liberar',
             );
             await new Promise((r) => setTimeout(r, espera * 1000));
             continue;
@@ -157,12 +157,12 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
       // A Omie devolve erro com HTTP 200 + faultstring, entao a retentativa
       // precisa acontecer aqui e nao no nivel do HTTP.
       if (dados && typeof dados === 'object' && 'faultstring' in dados && dados.faultstring) {
-        const espera = esperaPorConsumoRedundante(dados.faultstring);
+        const espera = esperaPorBloqueioTemporario(dados.faultstring);
 
         if (espera !== null && tentativa < TENTATIVAS) {
           logger.warn(
-            { recurso, metodo, tentativa, esperaSegundos: espera },
-            'consumo redundante na Omie, aguardando a janela liberar',
+            { recurso, metodo, tentativa, esperaSegundos: espera, motivo: dados.faultstring },
+            'bloqueio temporario na Omie, aguardando liberar',
           );
           await new Promise((r) => setTimeout(r, espera * 1000));
           continue;
