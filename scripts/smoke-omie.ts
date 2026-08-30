@@ -1,5 +1,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import { buscarComCredenciais, buscarPorSlug } from '../src/clientes/repository.js';
+import { encerrarPool } from '../src/db/pool.js';
 import { hojeEmSaoPaulo, somarDias } from '../src/lib/dates.js';
 import { formatarBRL, paraCentavos } from '../src/lib/money.js';
 import { listarContasCorrentes, listarExtrato } from '../src/omie/financas.js';
@@ -12,19 +14,32 @@ import { listarContasCorrentes, listarExtrato } from '../src/omie/financas.js';
  * Enquanto isso nao for confirmado com dado real, o conciliador pode inverter
  * entrada e saida sem que nada exploda.
  *
- *   npm run smoke:omie -- --dias 30
+ *   npm run smoke:omie -- --cliente acme --dias 30
  */
 
 async function principal(): Promise<void> {
   const { values } = parseArgs({
     options: {
+      cliente: { type: 'string' },
       dias: { type: 'string', default: '30' },
       conta: { type: 'string' },
     },
   });
 
-  console.log('\n=== Contas correntes na Omie ===\n');
-  const contas = await listarContasCorrentes();
+  if (!values.cliente) {
+    console.error('\nInforme --cliente <slug>. Veja os slugs com: npm run clientes -- listar\n');
+    process.exit(1);
+  }
+
+  const resumo = await buscarPorSlug(values.cliente);
+  if (!resumo) {
+    console.error(`\nCliente "${values.cliente}" nao encontrado.\n`);
+    process.exit(1);
+  }
+  const cliente = (await buscarComCredenciais(resumo.id))!;
+
+  console.log(`\n=== Contas correntes na Omie de "${cliente.nome}" ===\n`);
+  const contas = await listarContasCorrentes(cliente.omie);
 
   if (contas.length === 0) {
     console.log('Nenhuma conta corrente ativa encontrada.');
@@ -47,7 +62,7 @@ async function principal(): Promise<void> {
   const de = somarDias(ate, -Number(values.dias));
 
   console.log(`=== Extrato da conta ${codigoConta}: ${de} a ${ate} ===\n`);
-  const { resposta, movimentos } = await listarExtrato(codigoConta, de, ate);
+  const { resposta, movimentos } = await listarExtrato(cliente.omie, codigoConta, de, ate);
 
   console.log('Saldos:', {
     anterior: resposta.nSaldoAnterior,
@@ -109,14 +124,16 @@ async function principal(): Promise<void> {
 
   // O dump completo fica fora do git (.gitignore) — sao dados financeiros reais.
   await mkdir('tmp', { recursive: true });
-  const caminho = `tmp/extrato-${codigoConta}.dump.json`;
+  const caminho = `tmp/extrato-${cliente.slug}-${codigoConta}.dump.json`;
   await writeFile(caminho, JSON.stringify({ resposta, movimentos }, null, 2), 'utf8');
   console.log(`\nPayload bruto salvo em ${caminho} (ignorado pelo git).\n`);
 }
 
 principal()
+  .then(() => encerrarPool())
   .then(() => process.exit(0))
-  .catch((erro: Error) => {
+  .catch(async (erro: Error) => {
     console.error(`\nFalhou: ${erro.message}\n`);
+    await encerrarPool().catch(() => undefined);
     process.exit(1);
   });

@@ -14,33 +14,6 @@ const booleano = (padrao: boolean) =>
     .default(padrao ? 'true' : 'false')
     .transform((v) => v.trim().toLowerCase() === 'true');
 
-const contaMapeadaSchema = z.object({
-  /** Nome livre so pra aparecer no log, ex: "Itau PJ". */
-  apelido: z.string().min(1),
-  /** UUID da conta no Pluggy — vem de `npm run smoke:pluggy`. */
-  pluggyAccountId: z.string().min(1),
-  /** nCodCC da conta corrente na Omie — vem de `npm run smoke:omie`. */
-  omieCodigoContaCorrente: z.number().int().positive(),
-});
-
-export type ContaMapeada = z.infer<typeof contaMapeadaSchema>;
-
-const jsonDeContas = z
-  .string()
-  .default('[]')
-  .transform((texto, ctx) => {
-    try {
-      return JSON.parse(texto) as unknown;
-    } catch {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'CONTAS_MAPEADAS nao e um JSON valido. Veja o exemplo no .env.example.',
-      });
-      return z.NEVER;
-    }
-  })
-  .pipe(z.array(contaMapeadaSchema));
-
 /**
  * Variavel obrigatoria com mensagem propria.
  * Sem o `error` explicito, o zod reporta "expected string, received undefined",
@@ -52,16 +25,18 @@ const obrigatoria = (ondeConseguir: string) =>
     .min(1, { message: `vazia. ${ondeConseguir}` });
 
 const envSchema = z.object({
-  OMIE_APP_KEY: obrigatoria('Pegue em app.omie.com.br > Configuracoes > APIs.'),
-  OMIE_APP_SECRET: obrigatoria('Pegue em app.omie.com.br > Configuracoes > APIs.'),
+  // As credenciais de Omie e Pluggy NAO ficam aqui: sao por cliente e vivem
+  // cifradas no banco (tabela `cliente`). O ambiente guarda so o que e do
+  // servidor, valido para todos os clientes.
   OMIE_BASE_URL: z.string().min(1).default('https://app.omie.com.br/api/v1'),
-
-  PLUGGY_CLIENT_ID: obrigatoria('Pegue em dashboard.pluggy.ai > Aplicacao.'),
-  PLUGGY_CLIENT_SECRET: obrigatoria('Pegue em dashboard.pluggy.ai > Aplicacao.'),
 
   DATABASE_URL: obrigatoria('String de conexao do Postgres (Neon/Supabase).'),
 
-  CONTAS_MAPEADAS: jsonDeContas,
+  CREDENCIAIS_CHAVE: obrigatoria(
+    'Chave de 32 bytes que cifra as credenciais dos clientes. Gere com: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))". ' +
+      'Perder esta chave torna as credenciais guardadas irrecuperaveis.',
+  ),
 
   CONCILIACAO_TOLERANCIA_DIAS: z.coerce.number().int().min(0).max(15).default(2),
   CONCILIACAO_TOLERANCIA_VALOR_CENTAVOS: z.coerce.number().int().min(0).default(500),

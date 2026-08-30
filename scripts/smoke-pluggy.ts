@@ -1,55 +1,66 @@
 import { parseArgs } from 'node:util';
+import { buscarComCredenciais, buscarPorSlug } from '../src/clientes/repository.js';
+import { encerrarPool } from '../src/db/pool.js';
 import { hojeEmSaoPaulo, somarDias } from '../src/lib/dates.js';
 import { formatarBRL } from '../src/lib/money.js';
 import { normalizarTransacaoBanco } from '../src/conciliacao/normalize.js';
-import { listarContas, listarTransacoes, obterClientePluggy } from '../src/pluggy/client.js';
+import { listarContas, listarTransacoes, obterItem } from '../src/pluggy/client.js';
 
 /**
- * Valida as credenciais do Pluggy e descobre os accountId que vao no .env.
+ * Confere o lado do banco de um cliente e, principalmente, mostra o dado JA
+ * NORMALIZADO — que e como o matcher vai enxerga-lo. E onde se pega sinal
+ * invertido antes de virar conciliacao errada.
  *
- * Sem --item, lista os items (conexoes com instituicoes) da aplicacao.
- * Com --item, lista as contas daquele item e as transacoes recentes.
- *
- *   npm run smoke:pluggy
- *   npm run smoke:pluggy -- --item <uuid-do-item> --dias 15
+ *   npm run smoke:pluggy -- --cliente acme --item <itemId>
+ *   npm run smoke:pluggy -- --cliente acme --conta <accountId> --dias 30
  */
 
 async function principal(): Promise<void> {
   const { values } = parseArgs({
     options: {
+      cliente: { type: 'string' },
       item: { type: 'string' },
       conta: { type: 'string' },
       dias: { type: 'string', default: '15' },
     },
   });
 
-  const cliente = obterClientePluggy();
-
-  // A API do Pluggy nao lista os items de uma aplicacao: um item pertence a um
-  // usuario final e o ID e devolvido pelo Pluggy Connect no momento da conexao.
-  // Pegue o itemId em https://dashboard.pluggy.ai (Applications > Items).
-  if (!values.item && !values.conta) {
-    console.log(
-      '\nInforme um item ou uma conta:\n' +
-        '  npm run smoke:pluggy -- --item <itemId>\n' +
-        '  npm run smoke:pluggy -- --conta <accountId>\n\n' +
-        'O itemId aparece no dashboard do Pluggy (Applications > Items), ou e devolvido\n' +
-        'pelo Pluggy Connect quando a conta bancaria e conectada.\n',
-    );
-    return;
+  if (!values.cliente) {
+    console.error('\nInforme --cliente <slug>. Veja os slugs com: npm run clientes -- listar\n');
+    process.exit(1);
   }
+
+  const resumo = await buscarPorSlug(values.cliente);
+  if (!resumo) {
+    console.error(`\nCliente "${values.cliente}" nao encontrado.\n`);
+    process.exit(1);
+  }
+  const cliente = (await buscarComCredenciais(resumo.id))!;
 
   let accountId = values.conta;
 
+  // A API do Pluggy nao lista os items de uma aplicacao: um item pertence a um
+  // usuario final e o ID e devolvido pelo Pluggy Connect no momento da conexao.
+  if (!accountId && !values.item) {
+    // Sem item nem conta, cai nas contas ja mapeadas para este cliente.
+    if (cliente.contas.length === 0) {
+      console.error(
+        '\nInforme --item <itemId> ou --conta <accountId>.\n' +
+          'O itemId aparece no dashboard do Pluggy (Applications > Items).\n',
+      );
+      process.exit(1);
+    }
+    accountId = cliente.contas[0]!.pluggyAccountId;
+    console.log(`\nUsando a conta mapeada "${cliente.contas[0]!.apelido}".`);
+  }
+
   if (values.item) {
-    const item = await cliente.fetchItem(values.item);
+    const item = await obterItem(cliente.pluggy, values.item);
     console.log(
-      `\n=== Item ${item.id} — ${item.connector?.name ?? 'instituicao desconhecida'} ` +
-        `(status: ${item.status}) ===\n`,
+      `\n=== Item ${item.id} — ${item.connector?.name ?? 'instituicao'} (${item.status}) ===\n`,
     );
 
-    const contas = await listarContas(values.item);
-
+    const contas = await listarContas(cliente.pluggy, values.item);
     console.table(
       contas.map((c) => ({
         accountId: c.id,
@@ -59,11 +70,9 @@ async function principal(): Promise<void> {
         Saldo: formatarBRL(Math.round(c.balance * 100)),
       })),
     );
-    console.log('Use o accountId como "pluggyAccountId" em CONTAS_MAPEADAS.\n');
 
     // So conta corrente serve para conciliar extrato; cartao tem outra logica.
-    const contaCorrente = contas.find((c) => c.type === 'BANK') ?? contas[0];
-    accountId = accountId ?? contaCorrente?.id;
+    accountId = accountId ?? contas.find((c) => c.type === 'BANK')?.id ?? contas[0]?.id;
   }
 
   if (!accountId) {
@@ -74,8 +83,8 @@ async function principal(): Promise<void> {
   const ate = hojeEmSaoPaulo();
   const de = somarDias(ate, -Number(values.dias));
 
-  console.log(`=== Transacoes da conta ${accountId}: ${de} a ${ate} ===\n`);
-  const transacoes = await listarTransacoes(accountId, de, ate);
+  console.log(`\n=== Transacoes da conta ${accountId}: ${de} a ${ate} ===\n`);
+  const transacoes = await listarTransacoes(cliente.pluggy, accountId, de, ate);
   console.log(`Total: ${transacoes.length}\n`);
 
   if (transacoes.length === 0) {
@@ -83,7 +92,6 @@ async function principal(): Promise<void> {
     return;
   }
 
-  // Mostra o dado ja normalizado: e assim que o matcher vai enxergar.
   console.table(
     transacoes.slice(0, 10).map((t) => {
       const normalizado = normalizarTransacaoBanco(t);
@@ -91,21 +99,21 @@ async function principal(): Promise<void> {
         Data: normalizado?.data,
         Tipo: t.type,
         'Valor bruto': t.amount,
-        'Normalizado': normalizado ? formatarBRL(normalizado.valorCentavos) : '—',
+        Normalizado: normalizado ? formatarBRL(normalizado.valorCentavos) : '—',
         Descricao: (normalizado?.descricao ?? '').slice(0, 35),
         Documento: normalizado?.documento ?? '—',
       };
     }),
   );
 
-  console.log(
-    '\nConfira a coluna "Normalizado": saida deve estar negativa e entrada positiva.\n',
-  );
+  console.log('\nConfira "Normalizado": saida deve estar negativa e entrada positiva.\n');
 }
 
 principal()
+  .then(() => encerrarPool())
   .then(() => process.exit(0))
-  .catch((erro: Error) => {
+  .catch(async (erro: Error) => {
     console.error(`\nFalhou: ${erro.message}\n`);
+    await encerrarPool().catch(() => undefined);
     process.exit(1);
   });

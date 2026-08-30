@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
-import { executarConciliacao, janelaPadrao } from '../conciliacao/service.js';
+import { executarParaTodosClientes, janelaPadrao } from '../conciliacao/service.js';
 
 /**
  * Job diario de conciliacao.
@@ -38,10 +38,14 @@ export function agendarConciliacao(): void {
       const { de, ate } = janelaPadrao();
       executando = true;
 
-      void executarConciliacao(de, ate, 'CRON')
-        .then((resultado) => {
+      void executarParaTodosClientes(de, ate, 'CRON')
+        .then(({ sucessos, falhas }) => {
           logger.info(
-            { execucaoId: resultado.execucaoId, ...resultado.resumo },
+            {
+              clientesOk: sucessos.length,
+              clientesComFalha: falhas.length,
+              falhas: falhas.length > 0 ? falhas : undefined,
+            },
             'conciliacao agendada concluida',
           );
         })

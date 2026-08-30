@@ -1,3 +1,4 @@
+import type { CredenciaisOmie } from '../clientes/types.js';
 import { paraFormatoOmie, type DataISO } from '../lib/dates.js';
 import { logger } from '../lib/logger.js';
 import { chamarOmie, ehRespostaVazia } from './client.js';
@@ -17,7 +18,9 @@ import type {
 const REGISTROS_POR_PAGINA = 100;
 
 /** Lista todas as contas correntes cadastradas, seguindo a paginacao. */
-export async function listarContasCorrentes(): Promise<ContaCorrente[]> {
+export async function listarContasCorrentes(
+  credenciais: CredenciaisOmie,
+): Promise<ContaCorrente[]> {
   const contas: ContaCorrente[] = [];
   let pagina = 1;
   let totalDePaginas = 1;
@@ -26,6 +29,7 @@ export async function listarContasCorrentes(): Promise<ContaCorrente[]> {
     let resposta: ListarContasCorrentesResponse;
     try {
       resposta = await chamarOmie<ListarContasCorrentesResponse, ListarContasCorrentesRequest>(
+        credenciais,
         'geral/contacorrente',
         'ListarContasCorrentes',
         {
@@ -55,12 +59,14 @@ export async function listarContasCorrentes(): Promise<ContaCorrente[]> {
  * Este endpoint nao e paginado — devolve o periodo inteiro de uma vez.
  */
 export async function listarExtrato(
+  credenciais: CredenciaisOmie,
   codigoContaCorrente: number,
   de: DataISO,
   ate: DataISO,
 ): Promise<{ resposta: ListarExtratoResponse; movimentos: MovimentoExtrato[] }> {
   try {
     const resposta = await chamarOmie<ListarExtratoResponse, ListarExtratoRequest>(
+      credenciais,
       'financas/extrato',
       'ListarExtrato',
       {
@@ -82,6 +88,7 @@ export async function listarExtrato(
 }
 
 async function listarTitulosPaginado(
+  credenciais: CredenciaisOmie,
   recurso: 'financas/contareceber' | 'financas/contapagar',
   metodo: 'ListarContasReceber' | 'ListarContasPagar',
   extrairLote: (r: ListarContasReceberResponse & ListarContasPagarResponse) => TituloCadastro[],
@@ -99,7 +106,7 @@ async function listarTitulosPaginado(
       resposta = await chamarOmie<
         ListarContasReceberResponse & ListarContasPagarResponse,
         ListarTitulosRequest
-      >(recurso, metodo, {
+      >(credenciais, recurso, metodo, {
         pagina,
         registros_por_pagina: REGISTROS_POR_PAGINA,
         filtrar_por_data_de: paraFormatoOmie(de),
@@ -127,11 +134,13 @@ async function listarTitulosPaginado(
  * no extrato, o titulo pode estar aqui, ainda em aberto.
  */
 export function listarContasReceber(
+  credenciais: CredenciaisOmie,
   de: DataISO,
   ate: DataISO,
   codigoContaCorrente?: number,
 ): Promise<TituloCadastro[]> {
   return listarTitulosPaginado(
+    credenciais,
     'financas/contareceber',
     'ListarContasReceber',
     (r) => r.conta_receber_cadastro ?? [],
@@ -143,11 +152,13 @@ export function listarContasReceber(
 
 /** Titulos a pagar do periodo. Mesma finalidade de investigacao. */
 export function listarContasPagar(
+  credenciais: CredenciaisOmie,
   de: DataISO,
   ate: DataISO,
   codigoContaCorrente?: number,
 ): Promise<TituloCadastro[]> {
   return listarTitulosPaginado(
+    credenciais,
     'financas/contapagar',
     'ListarContasPagar',
     (r) => r.conta_pagar_cadastro ?? [],

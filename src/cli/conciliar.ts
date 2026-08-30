@@ -1,13 +1,19 @@
 import { parseArgs } from 'node:util';
+import { buscarPorSlug, listarClientes } from '../clientes/repository.js';
 import { ehDataISO } from '../lib/dates.js';
 import { formatarBRL } from '../lib/money.js';
 import { encerrarPool } from '../db/pool.js';
 import { listarItens } from '../db/repository.js';
-import { executarConciliacao, janelaPadrao } from '../conciliacao/service.js';
+import {
+  executarConciliacao,
+  executarParaTodosClientes,
+  janelaPadrao,
+} from '../conciliacao/service.js';
 
 /**
  * Execucao manual, sem subir servidor:
- *   npm run conciliar -- --de 2026-08-01 --ate 2026-08-07
+ *   npm run conciliar -- --cliente acme --de 2026-08-01 --ate 2026-08-07
+ *   npm run conciliar -- --todos --de 2026-08-01 --ate 2026-08-07
  *
  * E por aqui que se calibra o matcher antes de ligar o cron: roda um periodo
  * curto, le a tabela impressa e confere contra o extrato de verdade.
@@ -16,6 +22,8 @@ import { executarConciliacao, janelaPadrao } from '../conciliacao/service.js';
 async function principal(): Promise<void> {
   const { values } = parseArgs({
     options: {
+      cliente: { type: 'string' },
+      todos: { type: 'boolean', default: false },
       de: { type: 'string' },
       ate: { type: 'string' },
       detalhes: { type: 'boolean', default: false },
@@ -36,10 +44,33 @@ async function principal(): Promise<void> {
     process.exit(1);
   }
 
-  const resultado = await executarConciliacao(de, ate, 'MANUAL');
+  if (values.todos) {
+    return rodarTodos(de, ate);
+  }
+
+  if (!values.cliente) {
+    const clientes = await listarClientes();
+    console.error(
+      '\nInforme --cliente <slug>, ou --todos para rodar todos os clientes ativos.\n' +
+        (clientes.length > 0
+          ? `Clientes: ${clientes.map((c) => c.slug).join(', ')}\n`
+          : 'Nenhum cliente cadastrado ainda. Use: npm run clientes -- criar\n'),
+    );
+    process.exit(1);
+  }
+
+  const cliente = await buscarPorSlug(values.cliente);
+  if (!cliente) {
+    console.error(`\nCliente "${values.cliente}" nao encontrado.\n`);
+    process.exit(1);
+  }
+
+  const resultado = await executarConciliacao(cliente.id, de, ate, 'MANUAL');
   const { resumo } = resultado;
 
-  console.log(`\n=== Conciliacao #${resultado.execucaoId} — ${de} a ${ate} ===\n`);
+  console.log(
+    `\n=== Conciliacao #${resultado.execucaoId} — ${cliente.nome} — ${de} a ${ate} ===\n`,
+  );
   console.table(
     resultado.porConta.map((c) => ({
       Conta: c.conta,
@@ -82,6 +113,35 @@ async function principal(): Promise<void> {
         console.log(`... e mais ${paraOlhar.length - 50} itens. Consulte pela API.`);
       }
     }
+  }
+
+  console.log('');
+}
+
+/** Roda todos os clientes ativos, como o cron faz. */
+async function rodarTodos(de: string, ate: string): Promise<void> {
+  const { sucessos, falhas } = await executarParaTodosClientes(de, ate, 'MANUAL');
+
+  console.log(`\n=== Todos os clientes — ${de} a ${ate} ===\n`);
+
+  if (sucessos.length > 0) {
+    console.table(
+      sucessos.map((r) => ({
+        Cliente: r.cliente.nome,
+        Execucao: r.execucaoId,
+        'Tx banco': r.resumo.totalBanco,
+        'Lanc. Omie': r.resumo.totalOmie,
+        Conciliados: r.resumo.conciliados,
+        Revisar: r.resumo.revisar,
+        'Falta na Omie': r.resumo.pendenteOmie,
+      })),
+    );
+  }
+
+  if (falhas.length > 0) {
+    // Falha de um cliente nao interrompe os outros, mas nao pode passar batida.
+    console.log('\nClientes que falharam:');
+    console.table(falhas.map((f) => ({ Cliente: f.cliente, Erro: f.erro.slice(0, 80) })));
   }
 
   console.log('');

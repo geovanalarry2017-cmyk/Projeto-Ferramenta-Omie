@@ -1,3 +1,4 @@
+import type { CredenciaisOmie } from '../clientes/types.js';
 import { env } from '../config/env.js';
 import { ErroHttp, requisitar } from '../lib/http.js';
 import { logger } from '../lib/logger.js';
@@ -38,38 +39,54 @@ interface RespostaDeFalha {
 }
 
 /**
- * A Omie limita a taxa de chamadas por app. Estourar o limite devolve falha
- * com faultstring de consumo indevido, entao serializamos as chamadas e
- * deixamos um respiro entre elas em vez de disparar tudo em paralelo.
+ * A Omie limita a taxa de chamadas POR APP KEY. Com varios clientes, cada um
+ * tem a sua chave e o seu limite proprio — uma fila global faria o cliente A
+ * esperar o cliente B sem necessidade, e o job diario percorre todos.
+ *
+ * Por isso a fila e por app key, e nao uma so para o processo inteiro.
  */
 const INTERVALO_MINIMO_MS = 250;
-let filaDeChamadas: Promise<unknown> = Promise.resolve();
-let ultimaChamadaEm = 0;
 
-function enfileirar<T>(tarefa: () => Promise<T>): Promise<T> {
-  const resultado = filaDeChamadas.then(async () => {
-    const desdeUltima = Date.now() - ultimaChamadaEm;
+interface FilaDaChave {
+  fila: Promise<unknown>;
+  ultimaChamadaEm: number;
+}
+
+const filasPorChave = new Map<string, FilaDaChave>();
+
+function enfileirar<T>(appKey: string, tarefa: () => Promise<T>): Promise<T> {
+  const estado = filasPorChave.get(appKey) ?? { fila: Promise.resolve(), ultimaChamadaEm: 0 };
+
+  const resultado = estado.fila.then(async () => {
+    const desdeUltima = Date.now() - estado.ultimaChamadaEm;
     if (desdeUltima < INTERVALO_MINIMO_MS) {
       await new Promise((r) => setTimeout(r, INTERVALO_MINIMO_MS - desdeUltima));
     }
-    ultimaChamadaEm = Date.now();
+    estado.ultimaChamadaEm = Date.now();
     return tarefa();
   });
 
   // A fila nao pode quebrar quando uma chamada falha.
-  filaDeChamadas = resultado.catch(() => undefined);
+  estado.fila = resultado.catch(() => undefined);
+  filasPorChave.set(appKey, estado);
+
   return resultado;
 }
 
 
 /**
- * Executa um metodo da Omie.
+ * Executa um metodo da Omie em nome de um cliente.
  *
- * @param recurso caminho depois de /api/v1, ex: "financas/extrato"
- * @param metodo  valor do campo `call`, ex: "ListarExtrato"
- * @param param   objeto de parametros (a Omie sempre espera dentro de um array)
+ * As credenciais vem por parametro, nunca do ambiente: cada cliente do produto
+ * tem a sua conta Omie.
+ *
+ * @param credenciais App Key/Secret do cliente
+ * @param recurso     caminho depois de /api/v1, ex: "financas/extrato"
+ * @param metodo      valor do campo `call`, ex: "ListarExtrato"
+ * @param param       objeto de parametros (a Omie sempre espera dentro de um array)
  */
 export async function chamarOmie<TResposta, TParam extends object = object>(
+  credenciais: CredenciaisOmie,
   recurso: string,
   metodo: string,
   param: TParam,
@@ -78,14 +95,14 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
 
   const corpoRequisicao = JSON.stringify({
     call: metodo,
-    app_key: env.OMIE_APP_KEY,
-    app_secret: env.OMIE_APP_SECRET,
+    app_key: credenciais.appKey,
+    app_secret: credenciais.appSecret,
     param: [param],
   });
 
   const TENTATIVAS = 4;
 
-  return enfileirar(async () => {
+  return enfileirar(credenciais.appKey, async () => {
     logger.debug({ recurso, metodo, param }, 'chamando Omie');
 
     for (let tentativa = 1; ; tentativa += 1) {

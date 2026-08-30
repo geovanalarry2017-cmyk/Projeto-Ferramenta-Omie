@@ -1,5 +1,5 @@
-import { PluggyClient, type Account, type Transaction } from 'pluggy-sdk';
-import { env } from '../config/env.js';
+import { PluggyClient, type Account, type Item, type Transaction } from 'pluggy-sdk';
+import type { CredenciaisPluggy } from '../clientes/types.js';
 import type { DataISO } from '../lib/dates.js';
 import { logger } from '../lib/logger.js';
 
@@ -10,29 +10,52 @@ import { logger } from '../lib/logger.js';
  * (que expira em 2h) e renova sozinho, e itera a paginacao por cursor.
  * Aqui so isolamos o resto do projeto do tipo `PluggyClient`, para o dia em que
  * trocar de agregador (Belvo, Quanto) custar um arquivo e nao o codebase inteiro.
+ *
+ * Cada cliente do produto tem a sua conta Pluggy, entao ha uma instancia por
+ * clientId — nao um singleton. O cache existe porque cada instancia carrega a
+ * apiKey de 2h; recriar a cada chamada faria uma autenticacao a mais por
+ * requisicao, sem necessidade.
  */
 
-let instancia: PluggyClient | null = null;
+const instancias = new Map<string, PluggyClient>();
 
-export function obterClientePluggy(): PluggyClient {
-  if (!instancia) {
-    instancia = new PluggyClient({
-      clientId: env.PLUGGY_CLIENT_ID,
-      clientSecret: env.PLUGGY_CLIENT_SECRET,
-    });
-  }
-  return instancia;
+export function obterClientePluggy(credenciais: CredenciaisPluggy): PluggyClient {
+  const existente = instancias.get(credenciais.clientId);
+  if (existente) return existente;
+
+  const novo = new PluggyClient({
+    clientId: credenciais.clientId,
+    clientSecret: credenciais.clientSecret,
+  });
+
+  instancias.set(credenciais.clientId, novo);
+  return novo;
+}
+
+/** Descarta a instancia em cache — use ao trocar as credenciais de um cliente. */
+export function esquecerClientePluggy(clientId: string): void {
+  instancias.delete(clientId);
 }
 
 /** Contas de um item (uma conexao com uma instituicao financeira). */
-export async function listarContas(itemId: string): Promise<Account[]> {
-  const resposta = await obterClientePluggy().fetchAccounts(itemId);
+export async function listarContas(
+  credenciais: CredenciaisPluggy,
+  itemId: string,
+): Promise<Account[]> {
+  const resposta = await obterClientePluggy(credenciais).fetchAccounts(itemId);
   return resposta.results;
 }
 
+export function obterItem(credenciais: CredenciaisPluggy, itemId: string): Promise<Item> {
+  return obterClientePluggy(credenciais).fetchItem(itemId);
+}
+
 /** Uma conta especifica, pelo UUID. */
-export function obterConta(accountId: string): Promise<Account> {
-  return obterClientePluggy().fetchAccount(accountId);
+export function obterConta(
+  credenciais: CredenciaisPluggy,
+  accountId: string,
+): Promise<Account> {
+  return obterClientePluggy(credenciais).fetchAccount(accountId);
 }
 
 /**
@@ -43,11 +66,12 @@ export function obterConta(accountId: string): Promise<Account> {
  * longas — nao voltar para ele.
  */
 export async function listarTransacoes(
+  credenciais: CredenciaisPluggy,
   accountId: string,
   de: DataISO,
   ate: DataISO,
 ): Promise<Transaction[]> {
-  const transacoes = await obterClientePluggy().fetchAllTransactions(accountId, {
+  const transacoes = await obterClientePluggy(credenciais).fetchAllTransactions(accountId, {
     dateFrom: de,
     dateTo: ate,
   });
@@ -60,4 +84,4 @@ export async function listarTransacoes(
   return transacoes;
 }
 
-export type { Account, Transaction };
+export type { Account, Item, Transaction };

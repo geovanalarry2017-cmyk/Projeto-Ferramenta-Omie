@@ -6,6 +6,7 @@ export type OrigemDisparo = 'MANUAL' | 'CRON' | 'HTTP';
 
 export interface ExecucaoRegistrada {
   id: number;
+  cliente_id: number | null;
   periodo_de: string;
   periodo_ate: string;
   status: string;
@@ -21,15 +22,16 @@ export interface ExecucaoRegistrada {
 }
 
 export async function abrirExecucao(
+  clienteId: number,
   de: DataISO,
   ate: DataISO,
   disparo: OrigemDisparo,
 ): Promise<number> {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO conciliacao_execucao (periodo_de, periodo_ate, disparo, status)
-     VALUES ($1, $2, $3, 'EXECUTANDO')
+    `INSERT INTO conciliacao_execucao (cliente_id, periodo_de, periodo_ate, disparo, status)
+     VALUES ($1, $2, $3, $4, 'EXECUTANDO')
      RETURNING id`,
-    [de, ate, disparo],
+    [clienteId, de, ate, disparo],
   );
   return Number(rows[0]!.id);
 }
@@ -136,10 +138,20 @@ export async function gravarItens(
   );
 }
 
-export async function buscarExecucao(id: number): Promise<ExecucaoRegistrada | null> {
+/**
+ * Busca uma execucao SEMPRE dentro do escopo de um cliente.
+ *
+ * Nao existe versao "so pelo id": com varios clientes no mesmo banco, uma
+ * consulta sem cliente_id e um vazamento de dados financeiros esperando
+ * acontecer — bastaria alguem incrementar o id na URL.
+ */
+export async function buscarExecucao(
+  clienteId: number,
+  id: number,
+): Promise<ExecucaoRegistrada | null> {
   const { rows } = await pool.query<ExecucaoRegistrada>(
-    'SELECT * FROM conciliacao_execucao WHERE id = $1',
-    [id],
+    'SELECT * FROM conciliacao_execucao WHERE id = $1 AND cliente_id = $2',
+    [id, clienteId],
   );
   return rows[0] ?? null;
 }
@@ -165,10 +177,13 @@ export async function listarItens(
   return rows;
 }
 
-export async function listarExecucoes(limite = 20): Promise<ExecucaoRegistrada[]> {
+export async function listarExecucoes(
+  clienteId: number,
+  limite = 20,
+): Promise<ExecucaoRegistrada[]> {
   const { rows } = await pool.query<ExecucaoRegistrada>(
-    'SELECT * FROM conciliacao_execucao ORDER BY id DESC LIMIT $1',
-    [limite],
+    'SELECT * FROM conciliacao_execucao WHERE cliente_id = $1 ORDER BY id DESC LIMIT $2',
+    [clienteId, limite],
   );
   return rows;
 }
