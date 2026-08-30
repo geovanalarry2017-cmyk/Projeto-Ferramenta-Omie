@@ -16,6 +16,17 @@ import { logger } from '../lib/logger.js';
  * de CA publica, entao a validacao passa sem configuracao extra.
  */
 
+/**
+ * Por padrao o `pg` converte coluna DATE em objeto Date usando o fuso local,
+ * e "2026-08-30" volta como 2026-08-30T03:00:00.000Z. Alem de poluir o
+ * relatorio, isso reintroduz justamente o problema de fuso que o projeto
+ * inteiro evita ao tratar data como string AAAA-MM-DD.
+ *
+ * 1082 e o OID do tipo DATE no Postgres.
+ */
+const OID_DATE = 1082;
+pg.types.setTypeParser(OID_DATE, (valor: string) => valor);
+
 const precisaSsl = /sslmode=(require|verify)|neon\.tech|supabase\.(co|com)/i.test(env.DATABASE_URL);
 
 export const pool = new pg.Pool({

@@ -1,6 +1,11 @@
 import { env } from '../config/env.js';
 import { ErroHttp, requisitar } from '../lib/http.js';
 import { logger } from '../lib/logger.js';
+import {
+  ehFalhaDeConsumo,
+  ehMensagemDeListaVazia,
+  esperaPorConsumoRedundante,
+} from './faults.js';
 
 /**
  * Cliente da API da Omie.
@@ -56,9 +61,6 @@ function enfileirar<T>(tarefa: () => Promise<T>): Promise<T> {
   return resultado;
 }
 
-function ehFalhaDeConsumo(corpo: string): boolean {
-  return /consumo|excedid|limite|bloqueado temporariamente/i.test(corpo);
-}
 
 /**
  * Executa um metodo da Omie.
@@ -81,47 +83,63 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
     param: [param],
   });
 
+  const TENTATIVAS = 4;
+
   return enfileirar(async () => {
     logger.debug({ recurso, metodo, param }, 'chamando Omie');
 
-    let resposta: { status: number; corpo: string };
-    try {
-      resposta = await requisitar(
-        url,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: corpoRequisicao,
-        },
-        {
-          timeoutMs: 60_000,
-          tentativas: 4,
-          // Falha de limite de consumo vem como 5xx: vale esperar e repetir.
-          ehRetentavel: (status, corpo) =>
-            status === 429 || (status >= 500 && ehFalhaDeConsumo(corpo)) || status >= 502,
-        },
-      );
-    } catch (erro) {
-      if (erro instanceof ErroHttp) {
-        const falha = interpretarFalha(erro.corpo);
-        throw new ErroOmie(
-          falha?.faultstring ?? `Omie respondeu HTTP ${erro.status} em ${metodo}`,
-          falha?.faultcode,
-          recurso,
-          metodo,
+    for (let tentativa = 1; ; tentativa += 1) {
+      let resposta: { status: number; corpo: string };
+
+      try {
+        resposta = await requisitar(
+          url,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: corpoRequisicao,
+          },
+          {
+            timeoutMs: 60_000,
+            tentativas: 3,
+            ehRetentavel: (status, corpo) =>
+              status === 429 || (status >= 500 && ehFalhaDeConsumo(corpo)) || status >= 502,
+          },
         );
+      } catch (erro) {
+        if (erro instanceof ErroHttp) {
+          const falha = interpretarFalha(erro.corpo);
+          throw new ErroOmie(
+            falha?.faultstring ?? `Omie respondeu HTTP ${erro.status} em ${metodo}`,
+            falha?.faultcode,
+            recurso,
+            metodo,
+          );
+        }
+        throw erro;
       }
-      throw erro;
+
+      const dados = JSON.parse(resposta.corpo) as TResposta & RespostaDeFalha;
+
+      // A Omie devolve erro com HTTP 200 + faultstring, entao a retentativa
+      // precisa acontecer aqui e nao no nivel do HTTP.
+      if (dados && typeof dados === 'object' && 'faultstring' in dados && dados.faultstring) {
+        const espera = esperaPorConsumoRedundante(dados.faultstring);
+
+        if (espera !== null && tentativa < TENTATIVAS) {
+          logger.warn(
+            { recurso, metodo, tentativa, esperaSegundos: espera },
+            'consumo redundante na Omie, aguardando a janela liberar',
+          );
+          await new Promise((r) => setTimeout(r, espera * 1000));
+          continue;
+        }
+
+        throw new ErroOmie(dados.faultstring, dados.faultcode, recurso, metodo);
+      }
+
+      return dados as TResposta;
     }
-
-    const dados = JSON.parse(resposta.corpo) as TResposta & RespostaDeFalha;
-
-    // A Omie tambem devolve faultstring com HTTP 200 em alguns casos.
-    if (dados && typeof dados === 'object' && 'faultstring' in dados && dados.faultstring) {
-      throw new ErroOmie(dados.faultstring, dados.faultcode, recurso, metodo);
-    }
-
-    return dados as TResposta;
   });
 }
 
@@ -134,12 +152,7 @@ function interpretarFalha(corpo: string): RespostaDeFalha | null {
   }
 }
 
-/**
- * "Nao existem registros" nao e erro: e uma resposta legitima para um dia sem
- * movimento. A Omie sinaliza isso via faultstring, entao precisa ser detectado
- * pelo texto e tratado como lista vazia.
- */
+/** Lista vazia chega como erro pela API; aqui vira "sem registros" de novo. */
 export function ehRespostaVazia(erro: unknown): boolean {
-  if (!(erro instanceof ErroOmie)) return false;
-  return /nao (existem|foram encontrados|ha) registros|nenhum registro/i.test(erro.message);
+  return erro instanceof ErroOmie && ehMensagemDeListaVazia(erro.message);
 }
