@@ -119,19 +119,35 @@ export async function chamarOmie<TResposta, TParam extends object = object>(
           {
             timeoutMs: 60_000,
             tentativas: 3,
+            // Consumo redundante fica de FORA da retentativa do nivel HTTP: o
+            // backoff generico dela (1s, 2s, 4s) e curto demais para a janela
+            // que a Omie pede (dezenas de segundos), e so gastaria as
+            // tentativas antes de o tratamento correto entrar em acao.
             ehRetentavel: (status, corpo) =>
-              status === 429 || (status >= 500 && ehFalhaDeConsumo(corpo)) || status >= 502,
+              esperaPorConsumoRedundante(corpo) === null &&
+              (status === 429 || (status >= 500 && ehFalhaDeConsumo(corpo)) || status >= 502),
           },
         );
       } catch (erro) {
         if (erro instanceof ErroHttp) {
           const falha = interpretarFalha(erro.corpo);
-          throw new ErroOmie(
-            falha?.faultstring ?? `Omie respondeu HTTP ${erro.status} em ${metodo}`,
-            falha?.faultcode,
-            recurso,
-            metodo,
-          );
+          const mensagem =
+            falha?.faultstring ?? `Omie respondeu HTTP ${erro.status} em ${metodo}`;
+
+          // A mesma falha de consumo redundante chega ora como HTTP 200 com
+          // faultstring, ora como HTTP 500. Tratar so um dos caminhos deixa o
+          // outro passar direto — foi o que aconteceu na primeira versao.
+          const espera = esperaPorConsumoRedundante(erro.corpo);
+          if (espera !== null && tentativa < TENTATIVAS) {
+            logger.warn(
+              { recurso, metodo, tentativa, esperaSegundos: espera, status: erro.status },
+              'consumo redundante na Omie, aguardando a janela liberar',
+            );
+            await new Promise((r) => setTimeout(r, espera * 1000));
+            continue;
+          }
+
+          throw new ErroOmie(mensagem, falha?.faultcode, recurso, metodo);
         }
         throw erro;
       }
