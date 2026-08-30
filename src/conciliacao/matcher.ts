@@ -77,9 +77,7 @@ export function conciliar(
     if (omieUsado.has(lanc.id)) continue;
     itens.push({
       status: 'PENDENTE_BANCO',
-      motivo: lanc.jaConciliado
-        ? 'Lancamento ja marcado como conciliado na Omie, mas sem transacao correspondente no extrato do periodo.'
-        : 'Existe na Omie e nao foi encontrada transacao correspondente no extrato do banco.',
+      motivo: motivoPendenteBanco(lanc),
       score: null,
       banco: null,
       omie: lanc,
@@ -219,6 +217,21 @@ function atribuirUmParaUm(candidatos: ParCandidato[]): ParCandidato[] {
   return escolhidos;
 }
 
+function motivoPendenteBanco(lanc: LancamentoOmie): string {
+  // Uma previsao sem correspondente no banco e o esperado, nao um problema:
+  // e uma conta que ainda vai vencer. Reportar como divergencia encheria o
+  // relatorio de ruido e esconderia as pendencias de verdade.
+  if (lanc.ehPrevisao) {
+    return `Lancamento apenas previsto na Omie (situacao "${lanc.situacao}"), ainda nao realizado. Sem correspondente no banco — comportamento esperado.`;
+  }
+
+  if (lanc.jaConciliado) {
+    return 'Lancamento ja marcado como conciliado na Omie, mas sem transacao correspondente no extrato do periodo.';
+  }
+
+  return 'Existe na Omie e nao foi encontrada transacao correspondente no extrato do banco.';
+}
+
 function classificarPar(par: ParCandidato, regras: RegrasConciliacao): ItemConciliacao {
   const base = {
     score: par.score,
@@ -226,6 +239,18 @@ function classificarPar(par: ParCandidato, regras: RegrasConciliacao): ItemConci
     omie: par.omie,
     diferencaCentavos: par.diferencaCentavos,
   };
+
+  // O dinheiro entrou/saiu de fato, mas na Omie o lancamento continua como
+  // previsao. Nao e "conciliado": alguem precisa dar baixa no titulo.
+  if (par.omie.ehPrevisao) {
+    return {
+      ...base,
+      status: 'REVISAR',
+      motivo:
+        `A transacao ocorreu no banco, mas na Omie o lancamento ainda esta como ` +
+        `"${par.omie.situacao}". Precisa dar baixa no titulo.`,
+    };
+  }
 
   if (par.diferencaCentavos !== 0) {
     return {

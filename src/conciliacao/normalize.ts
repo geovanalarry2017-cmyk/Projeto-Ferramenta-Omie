@@ -78,10 +78,25 @@ export interface OpcoesNormalizacaoOmie {
   sinalPorNatureza: boolean;
 }
 
+/**
+ * Situacoes que indicam movimento apenas PREVISTO, que ainda nao aconteceu de
+ * fato na conta. Uma previsao sem correspondente no banco nao e divergencia —
+ * e so uma conta que ainda vai vencer.
+ *
+ * Vocabulario confirmado ate agora com dado real: "Previsto".
+ * Se aparecerem outros valores, some aqui.
+ */
+const SITUACOES_PREVISTAS = new Set(['previsto', 'a vencer', 'em aberto']);
+
 export function normalizarMovimentoOmie(
   mov: MovimentoExtrato,
   opcoes: OpcoesNormalizacaoOmie,
 ): LancamentoOmie | null {
+  // listaMovimentos mistura movimentos reais com linhas sinteticas de saldo
+  // diario ("SALDO", "SALDO ANTERIOR"): valor zero, sem nCodLancamento.
+  // Sem este filtro, cada dia do periodo vira um lancamento fantasma.
+  if (mov.nCodLancamento === undefined || mov.nCodLancamento === null) return null;
+
   const data = deFormatoOmie(mov.dDataLancamento);
   if (!data) return null;
 
@@ -92,6 +107,8 @@ export function normalizarMovimentoOmie(
     .join(' ')
     .trim();
 
+  const situacao = mov.cSituacao?.trim() ?? '';
+
   return {
     id: String(mov.nCodLancamento),
     data,
@@ -100,6 +117,8 @@ export function normalizarMovimentoOmie(
     documento: normalizarDocumento(mov.cDocCliente),
     tokens: tokenizarDescricao(descricao),
     jaConciliado: Boolean(mov.dDataConciliacao?.trim()),
+    situacao,
+    ehPrevisao: SITUACOES_PREVISTAS.has(situacao.toLowerCase()),
   };
 }
 

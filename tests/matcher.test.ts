@@ -159,6 +159,45 @@ describe('conciliar', () => {
     expect(itens[0]!.motivo).toMatch(/ja marcado como conciliado/i);
   });
 
+  it('pede baixa quando o movimento ocorreu mas a Omie ainda marca como previsto', () => {
+    const { itens } = conciliar(
+      [movimentoBanco({ id: 'b1', data: '2026-08-27', valorCentavos: 2_350_00 })],
+      [
+        lancamentoOmie({
+          id: 'o1',
+          data: '2026-08-27',
+          valorCentavos: 2_350_00,
+          situacao: 'Previsto',
+          ehPrevisao: true,
+        }),
+      ],
+      REGRAS_PADRAO,
+    );
+
+    expect(itens[0]!.status).toBe('REVISAR');
+    expect(itens[0]!.motivo).toMatch(/dar baixa/i);
+  });
+
+  it('nao trata previsao sem correspondente como divergencia', () => {
+    // Conta a vencer no futuro: nao existir no banco e o esperado.
+    const { itens } = conciliar(
+      [],
+      [
+        lancamentoOmie({
+          id: 'o1',
+          data: '2026-09-15',
+          valorCentavos: 2_350_00,
+          situacao: 'Previsto',
+          ehPrevisao: true,
+        }),
+      ],
+      REGRAS_PADRAO,
+    );
+
+    expect(itens[0]!.status).toBe('PENDENTE_BANCO');
+    expect(itens[0]!.motivo).toMatch(/comportamento esperado/i);
+  });
+
   it('e deterministico: mesma entrada, mesmo resultado', () => {
     const banco = [
       movimentoBanco({ id: 'b1', data: '2026-08-10', valorCentavos: -50_00 }),

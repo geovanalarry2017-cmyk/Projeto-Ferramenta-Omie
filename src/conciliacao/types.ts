@@ -32,6 +32,13 @@ export interface LancamentoOmie {
   tokens: Set<string>;
   /** Se a Omie ja marcou como conciliado — nao mexer nesses. */
   jaConciliado: boolean;
+  /** cSituacao cru da Omie, ex: "Previsto". Util para diagnosticar o relatorio. */
+  situacao: string;
+  /**
+   * Movimento apenas previsto, que ainda nao aconteceu na conta.
+   * Nao ter correspondente no banco e o comportamento esperado, nao divergencia.
+   */
+  ehPrevisao: boolean;
 }
 
 export type StatusItem =

@@ -120,6 +120,39 @@ describe('normalizacao do lado Omie', () => {
   it('descarta movimento sem data valida', () => {
     expect(normalizarMovimentoOmie({ ...base, dDataLancamento: '' }, { sinalPorNatureza: true })).toBeNull();
   });
+
+  it('descarta as linhas sinteticas de saldo do extrato', () => {
+    // Payload real: listaMovimentos intercala uma linha de saldo por dia,
+    // sem nCodLancamento. Sem o filtro, cada dia vira um lancamento fantasma.
+    const linhaDeSaldo = {
+      cDesCliente: 'SALDO ANTERIOR',
+      dDataLancamento: '30/07/2026',
+      nSaldo: 0,
+      nSaldoPrev: 0,
+      nValorDocumento: 0,
+    } as MovimentoExtrato;
+
+    expect(normalizarMovimentoOmie(linhaDeSaldo, { sinalPorNatureza: true })).toBeNull();
+  });
+
+  it('marca lancamento previsto como nao realizado', () => {
+    const lanc = normalizarMovimentoOmie(
+      { ...base, cNatureza: 'R', cSituacao: 'Previsto' },
+      { sinalPorNatureza: true },
+    );
+
+    expect(lanc!.ehPrevisao).toBe(true);
+    expect(lanc!.situacao).toBe('Previsto');
+  });
+
+  it('nao marca lancamento liquidado como previsao', () => {
+    const lanc = normalizarMovimentoOmie(
+      { ...base, cNatureza: 'R', cSituacao: 'Liquidado' },
+      { sinalPorNatureza: true },
+    );
+
+    expect(lanc!.ehPrevisao).toBe(false);
+  });
 });
 
 describe('normalizacao do lado banco', () => {

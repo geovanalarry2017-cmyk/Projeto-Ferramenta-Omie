@@ -28,6 +28,8 @@ export function lancamentoOmie(
     descricao,
     documento: null,
     jaConciliado: false,
+    situacao: 'Liquidado',
+    ehPrevisao: false,
     tokens: parcial.tokens ?? tokenizarDescricao(descricao),
     ...parcial,
   };
