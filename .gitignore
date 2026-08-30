@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+
+# Segredos — nunca versionar
+.env
+.env.*
+!.env.example
+
+# Dumps dos smoke tests podem conter dados financeiros reais
+tmp/
+*.dump.json
+
+# Artefato solto na pasta, nao faz parte do projeto
+skills-export.zip
