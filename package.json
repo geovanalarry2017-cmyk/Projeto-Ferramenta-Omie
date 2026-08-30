@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "tsx src/db/migrate.ts",
+    "demo": "tsx scripts/servidor-demo.ts",
     "clientes": "tsx src/cli/clientes.ts",
     "conciliar": "tsx src/cli/conciliar.ts",
     "smoke:omie": "tsx scripts/smoke-omie.ts",

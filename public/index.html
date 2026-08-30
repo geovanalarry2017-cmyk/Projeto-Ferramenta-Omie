@@ -4,9 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Financeiro — DRE e Fluxo de Caixa</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.6/chart.umd.min.js"></script>
+<!--
+  Versão fixa e conferida: o cdnjs não serve todas as versões do Chart.js, e um
+  caminho inexistente devolve 404 sem barulho nenhum — a página carrega inteira
+  e só os gráficos somem.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
 <style>
   :root {
+    /* Faz os controles nativos (campo de data, select, barra de rolagem)
+       seguirem o tema. Sem isso o seletor de data fica branco no escuro. */
+    color-scheme: light;
+
     --fundo: #f6f7f9;
     --superficie: #ffffff;
     --borda: #e3e6ea;
@@ -15,11 +24,38 @@
     --positivo: #14804a;
     --negativo: #c0392b;
     --destaque: #2b6cb0;
+    /* O azul de destaque clareia no tema escuro, e aí texto branco em cima dele
+       fica com contraste de ~2:1. A cor do texto do botão acompanha o fundo. */
+    --destaque-texto: #ffffff;
     --aviso-fundo: #fff8e6;
     --aviso-borda: #f0c674;
+
+    /*
+      Cores dos gráficos. Paleta conferida com validador: faixa de luminosidade,
+      piso de croma, contraste contra o fundo e separação sob daltonismo.
+
+      O par entrada/saída fica na faixa-piso sob protanopia — inevitável em
+      verde x vermelho. Por isso a leitura nunca depende só da cor: entrada fica
+      acima do eixo e saída abaixo, a cascata rotula cada barra com o valor, e a
+      tabela do DRE logo abaixo diz o mesmo em texto.
+    */
+    --serie-entrada: #008300;
+    --serie-saida: #e34948;
+    --serie-saldo: #2a78d6;
   }
+  /*
+    O tema escuro aparece em dois escopos, e os dois são necessários:
+    o @media cobre quem deixou no "Sistema" (e vale antes do JS rodar, então a
+    página nunca pisca no tema errado), e o [data-theme] cobre a escolha
+    explícita, que tem que ganhar do sistema nas duas direções.
+    O :not() no @media é o que deixa "Claro" vencer um sistema escuro.
+
+    As cores das séries no escuro são a mesma paleta reescalonada para o fundo
+    escuro, não o claro invertido: passaram pelo validador contra #1c2027.
+  */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --fundo: #14171c;
       --superficie: #1c2027;
       --borda: #2c323b;
@@ -28,17 +64,81 @@
       --positivo: #4ade80;
       --negativo: #f87171;
       --destaque: #7cb3f0;
+      --destaque-texto: #0d1219;
       --aviso-fundo: #322a12;
       --aviso-borda: #7a6224;
+      --serie-entrada: #008300;
+      --serie-saida: #e66767;
+      --serie-saldo: #3987e5;
     }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --fundo: #14171c;
+    --superficie: #1c2027;
+    --borda: #2c323b;
+    --texto: #e7eaee;
+    --suave: #9aa4b2;
+    --positivo: #4ade80;
+    --negativo: #f87171;
+    --destaque: #7cb3f0;
+    --destaque-texto: #0d1219;
+    --aviso-fundo: #322a12;
+    --aviso-borda: #7a6224;
+    --serie-entrada: #008300;
+    --serie-saida: #e66767;
+    --serie-saldo: #3987e5;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 24px;
+    margin: 0;
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: var(--fundo); color: var(--texto);
   }
+
+  /* ---------- Barra lateral ---------- */
+
+  .app { display: flex; align-items: flex-start; min-height: 100vh; }
+
+  .lateral {
+    position: sticky; top: 0; flex: none;
+    width: 232px; height: 100vh; padding: 20px 14px;
+    background: var(--superficie); border-right: 1px solid var(--borda);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .lateral nav { display: flex; flex-direction: column; gap: 4px; }
+  .aba {
+    display: flex; align-items: center; gap: 10px;
+    background: transparent; color: var(--suave);
+    border: 1px solid transparent; border-radius: 8px;
+    padding: 9px 10px; font-size: 13px; font-weight: 500;
+    text-align: left; cursor: pointer; width: 100%;
+  }
+  .aba:hover { color: var(--texto); background: var(--fundo); }
+  /* A aba ativa não se distingue só pela cor: ganha peso e uma faixa à esquerda. */
+  .aba[aria-current="page"] {
+    color: var(--destaque); font-weight: 650;
+    background: color-mix(in srgb, var(--destaque) 10%, transparent);
+    box-shadow: inset 3px 0 0 var(--destaque);
+  }
+  .aba svg { width: 17px; height: 17px; flex: none; }
+
+  .conteudo { flex: 1; min-width: 0; padding: 24px; }
   .container { max-width: 1180px; margin: 0 auto; }
+
+  /* Em tela estreita a lateral vira uma faixa no topo. */
+  @media (max-width: 860px) {
+    .app { display: block; }
+    .lateral {
+      position: static; width: auto; height: auto; flex-direction: row;
+      align-items: center; gap: 10px; padding: 10px 14px;
+      border-right: none; border-bottom: 1px solid var(--borda);
+      overflow-x: auto;
+    }
+    .lateral nav { flex-direction: row; }
+    .aba { width: auto; white-space: nowrap; }
+    .aba[aria-current="page"] { box-shadow: none; }
+  }
   h1 { font-size: 20px; margin: 0 0 2px; }
   .sub { color: var(--suave); font-size: 13px; margin-bottom: 20px; }
 
@@ -55,7 +155,7 @@
     background: var(--fundo); color: var(--texto);
   }
   button {
-    background: var(--destaque); color: #fff; border-color: transparent;
+    background: var(--destaque); color: var(--destaque-texto); border-color: transparent;
     cursor: pointer; font-weight: 600;
   }
   button:disabled { opacity: .55; cursor: progress; }
@@ -66,8 +166,10 @@
   .cartao .valor { font-size: 22px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
 
   .painel { background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
-  .painel h2 { font-size: 15px; margin: 0 0 12px; }
+  .painel h2 { font-size: 15px; margin: 0 0 2px; }
+  .painel .nota { color: var(--suave); font-size: 12px; margin: 0 0 12px; }
   .grafico { position: relative; height: 300px; }
+  .grafico.alto { height: 390px; }
 
   .rolagem { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -88,13 +190,138 @@
   .aviso p { margin: 0 0 8px; font-size: 13px; }
   .erro { border-color: var(--negativo); background: color-mix(in srgb, var(--negativo) 12%, transparent); }
   .oculto { display: none; }
-  .vazio { color: var(--suave); padding: 28px 0; text-align: center; }
+
+  /*
+    O aviso de "sem dados" é uma camada sobre o canvas, nunca um innerHTML no
+    lugar dele: destruir o canvas faz o gráfico não voltar mais quando o período
+    seguinte tem movimento, e o usuário fica achando que a tela quebrou.
+  */
+  .vazio {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--suave); text-align: center;
+    background: var(--superficie);
+  }
+  /* Duas classes para vencer o display:flex acima — .oculto sozinho tem a mesma
+     especificidade e perde por vir antes, o que deixaria o aviso por cima do
+     gráfico pronto. */
+  .vazio.oculto { display: none; }
+
+  /* ---------- Cabeçalho e botão de tema ---------- */
+
+  .cabecalho { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .tema-botao {
+    background: var(--superficie); color: var(--suave);
+    border: 1px solid var(--borda); border-radius: 999px;
+    width: 38px; height: 38px; padding: 0; flex: none;
+    display: grid; place-items: center;
+  }
+  .tema-botao:hover { color: var(--texto); border-color: var(--suave); }
+  .tema-botao svg { width: 19px; height: 19px; display: block; }
+
+  /* ---------- Escolha de gráficos ---------- */
+
+  .chips { gap: 8px; align-items: center; }
+  .chips .titulo { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); margin-right: 2px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--borda); border-radius: 999px;
+    padding: 6px 13px 6px 10px; cursor: pointer;
+    font-size: 13px; user-select: none;
+  }
+  .chip input { width: 14px; height: 14px; margin: 0; accent-color: var(--destaque); }
+  /* O estado ligado não é só a cor: a caixa marcada continua visível. */
+  .chip:has(input:checked) { border-color: var(--destaque); background: color-mix(in srgb, var(--destaque) 10%, transparent); }
+  .chip:has(input:focus-visible) { outline: 2px solid var(--destaque); outline-offset: 2px; }
+
+  /* ---------- Matriz mês a mês ---------- */
+
+  .painel .acoes { float: right; margin-top: -2px; }
+  .painel .acoes button { padding: 5px 11px; font-size: 12px; }
+
+  .matriz th, .matriz td { border-bottom: 1px solid var(--borda); }
+  .matriz .conta { position: sticky; left: 0; background: var(--superficie); z-index: 1; }
+  .matriz tr.raiz .conta, .matriz tr.total .conta { background: var(--superficie); }
+  /*
+    Mapa de calor em tom pastel: o teto é baixo de propósito. Cor forte disputa
+    a atenção com o próprio número e cansa numa tabela cheia — a graduação só
+    precisa ser suficiente para o mês fora da curva saltar na varredura.
+  */
+  .matriz td.mes { text-align: right; padding: 7px 10px; }
+  /* Total fixo à direita: com doze meses ele sairia da tela, e é justamente a
+     coluna que se olha depois de varrer os meses. */
+  .matriz .total-linha {
+    position: sticky; right: 0; z-index: 1;
+    text-align: right; font-weight: 650;
+    border-left: 2px solid var(--borda);
+    background: var(--superficie);
+  }
+  /* Total do período como pílula, para separar do corpo da matriz. */
+  .matriz .pilula {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .vazio-linha { color: var(--suave); padding: 24px 0; text-align: center; }
+  .matriz .legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--suave); margin-top: 10px; }
+  .matriz .escala { display: flex; height: 10px; border-radius: 3px; overflow: hidden; width: 160px; }
+  .matriz .escala span { flex: 1; }
+
+  /* ---------- Mapa de oportunidades ---------- */
+
+  .achado { display: grid; grid-template-columns: 4px 1fr; gap: 0; overflow: hidden; }
+  .achado .faixa { background: var(--suave); }
+  .achado.alta .faixa { background: var(--negativo); }
+  .achado.media .faixa { background: var(--aviso-borda); }
+  .achado.informativa .faixa { background: var(--serie-saldo); }
+  .achado .corpo { padding: 16px 18px; }
+  .achado h3 { margin: 0; font-size: 15px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .achado .cifra { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .achado.alta .cifra { color: var(--negativo); }
+  .achado p { margin: 8px 0 0; }
+  /* "O que fazer" é o que separa diagnóstico de oportunidade; fica destacado. */
+  .achado .acao {
+    margin-top: 10px; padding: 10px 12px;
+    background: var(--fundo); border-radius: 8px;
+    font-size: 13px;
+  }
+  .achado .acao b { color: var(--texto); }
+
+  /* Etiqueta de severidade: texto, não só cor. */
+  .selo {
+    font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 999px; color: var(--suave);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .achado.alta .selo { color: var(--negativo); }
+  .achado.informativa .selo { color: var(--serie-saldo); }
 </style>
 </head>
 <body>
+<div class="app">
+<aside class="lateral">
+  <nav id="abas">
+    <button class="aba" type="button" data-aba="financeiro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 20h18M6 20V11M11 20V5M16 20v-7M21 20v-4"/></svg>
+      Financeiro
+    </button>
+    <button class="aba" type="button" data-aba="oportunidades">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg>
+      Mapa de Oportunidades
+    </button>
+  </nav>
+</aside>
+
+<main class="conteudo">
 <div class="container">
-  <h1>Financeiro</h1>
-  <div class="sub">DRE e fluxo de caixa a partir dos dados da Omie</div>
+  <div class="cabecalho">
+    <div>
+      <h1 id="titulo">Financeiro</h1>
+      <div class="sub" id="subtitulo">DRE e fluxo de caixa a partir dos dados da Omie</div>
+    </div>
+    <button id="tema" class="tema-botao" type="button" title="Alternar tema" aria-label="Alternar tema"></button>
+  </div>
 
   <div class="barra">
     <div class="campo">
@@ -109,7 +336,7 @@
       <label for="ate">Até</label>
       <input type="date" id="ate">
     </div>
-    <div class="campo">
+    <div class="campo so-financeiro">
       <label for="regime">Regime</label>
       <select id="regime">
         <option value="caixa">Caixa (o que foi pago)</option>
@@ -123,12 +350,20 @@
     <button id="carregar">Carregar</button>
   </div>
 
+  <div class="barra chips so-financeiro" id="escolha">
+    <span class="titulo">Gráficos</span>
+  </div>
+
   <div id="erro" class="aviso erro oculto"></div>
+
+  <!-- ================= Financeiro ================= -->
+  <section id="sec-financeiro">
 
   <div class="cartoes">
     <div class="cartao"><div class="rotulo">Receita líquida</div><div class="valor" id="c-receita">—</div></div>
     <div class="cartao"><div class="rotulo">Despesas</div><div class="valor" id="c-despesa">—</div></div>
     <div class="cartao"><div class="rotulo">Resultado</div><div class="valor" id="c-resultado">—</div></div>
+    <div class="cartao"><div class="rotulo">Margem líquida</div><div class="valor" id="c-margem">—</div></div>
     <div class="cartao"><div class="rotulo">Saldo de caixa no período</div><div class="valor" id="c-caixa">—</div></div>
   </div>
 
@@ -138,20 +373,32 @@
     <div class="rolagem"><table id="tabela-nao-classificado"></table></div>
   </div>
 
-  <div class="painel">
-    <h2>Fluxo de caixa</h2>
-    <div class="grafico"><canvas id="g-caixa"></canvas></div>
-  </div>
-
-  <div class="painel">
-    <h2>Composição do resultado</h2>
-    <div class="grafico"><canvas id="g-dre"></canvas></div>
-  </div>
+  <!-- Os painéis dos gráficos são gerados a partir do registro em JS, para a
+       lista de chips e a de painéis não saírem de sincronia. -->
+  <div id="paineis"></div>
 
   <div class="painel">
     <h2>DRE</h2>
     <div class="rolagem"><table id="tabela-dre"></table></div>
   </div>
+
+  </section>
+
+  <!-- ============ Mapa de Oportunidades ============ -->
+  <section id="sec-oportunidades" class="oculto">
+
+    <div class="cartoes">
+      <div class="cartao"><div class="rotulo">Precisa de ação</div><div class="valor" id="o-alta">—</div></div>
+      <div class="cartao"><div class="rotulo">Vale acompanhar</div><div class="valor" id="o-media">—</div></div>
+      <div class="cartao"><div class="rotulo">Bom saber</div><div class="valor" id="o-info">—</div></div>
+      <div class="cartao"><div class="rotulo">Dinheiro em jogo</div><div class="valor" id="o-jogo">—</div></div>
+    </div>
+
+    <div id="o-lista"></div>
+
+  </section>
+</div>
+</main>
 </div>
 
 <script>
@@ -161,9 +408,140 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 const moeda = (centavos) => brl.format((centavos ?? 0) / 100);
 const classeValor = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero');
 
+// Rótulo curto para caber ao lado da barra. "R$ 448.725,86" não cabe; o valor
+// exato continua na tabela do DRE e no tooltip.
+function moedaCurta(centavos) {
+  const reais = (centavos ?? 0) / 100;
+  const abs = Math.abs(reais);
+  const sinal = reais < 0 ? '-' : '';
+  const n = (v, casas) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
+
+  // "M" e não "mi": ao lado de "mil", numa coluna de valores, "mi" difere por
+  // uma letra só e um milhão passa por mil.
+  if (abs >= 1_000_000) return `${sinal}R$ ${n(abs / 1_000_000, 2)} M`;
+  if (abs >= 1_000) return `${sinal}R$ ${n(abs / 1_000, 1)} mil`;
+  return `${sinal}R$ ${n(abs, 0)}`;
+}
+
 // O token fica só neste navegador; nunca é enviado a lugar nenhum além da
 // própria API. Evita redigitar a cada recarga.
 try { $('token').value = localStorage.getItem('omie.token') || ''; } catch {}
+
+// ---------- Tema ----------
+
+const SOL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/>
+  <path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>`;
+
+const LUA = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>`;
+
+const preferenciaDoSistema = window.matchMedia('(prefers-color-scheme: dark)');
+
+/**
+ * O botão alterna entre claro e escuro, e a escolha vence o sistema.
+ *
+ * Na primeira visita não há escolha nenhuma: aí vale o sistema, e o botão só
+ * espelha o que já está na tela. Mostra o ícone do tema **atual**, não o do
+ * destino — o do destino faz o botão parecer errado no primeiro olhar.
+ */
+function temaAtual() {
+  const salvo = document.documentElement.dataset.theme;
+  if (salvo) return salvo === 'dark' ? 'escuro' : 'claro';
+  return preferenciaDoSistema.matches ? 'escuro' : 'claro';
+}
+
+function pintarBotaoDeTema() {
+  const escuro = temaAtual() === 'escuro';
+  $('tema').innerHTML = escuro ? LUA : SOL;
+  $('tema').title = escuro ? 'Tema escuro — clique para o claro' : 'Tema claro — clique para o escuro';
+  $('tema').setAttribute('aria-label', $('tema').title);
+}
+
+try {
+  const salvo = localStorage.getItem('omie.tema');
+  if (salvo === 'claro' || salvo === 'escuro') {
+    document.documentElement.dataset.theme = salvo === 'escuro' ? 'dark' : 'light';
+  }
+} catch {}
+pintarBotaoDeTema();
+
+$('tema').addEventListener('click', () => {
+  const proximo = temaAtual() === 'escuro' ? 'claro' : 'escuro';
+  document.documentElement.dataset.theme = proximo === 'escuro' ? 'dark' : 'light';
+  try { localStorage.setItem('omie.tema', proximo); } catch {}
+  pintarBotaoDeTema();
+  redesenhar();
+});
+
+// Sem escolha explícita, trocar o tema do SO tem que repintar os gráficos: eles
+// leem as cores do CSS na hora em que são construídos, não depois.
+preferenciaDoSistema.addEventListener('change', () => {
+  if (document.documentElement.dataset.theme) return;
+  pintarBotaoDeTema();
+  redesenhar();
+});
+
+// ---------- Abas ----------
+
+const ABAS = {
+  financeiro: {
+    titulo: 'Financeiro',
+    subtitulo: 'DRE e fluxo de caixa a partir dos dados da Omie',
+    carregado: () => dados.dre !== null,
+    carregar: () => carregarFinanceiro(),
+  },
+  oportunidades: {
+    titulo: 'Mapa de Oportunidades',
+    subtitulo: 'Onde agir, a partir do que os números do período mostram — sempre em regime de caixa',
+    carregado: () => dados.oportunidades !== null,
+    carregar: () => carregarOportunidades(),
+  },
+};
+
+let abaAtual = 'financeiro';
+
+/**
+ * Troca de aba.
+ *
+ * A aba entra no hash da URL para o link ser compartilhável e o F5 cair onde
+ * se estava. Carrega os dados na primeira visita à aba, não a cada troca —
+ * cada carga é uma ida à Omie.
+ */
+function trocarAba(id, { buscar = true } = {}) {
+  if (!ABAS[id]) id = 'financeiro';
+  abaAtual = id;
+
+  for (const [chave, aba] of Object.entries(ABAS)) {
+    const ativa = chave === id;
+    $(`sec-${chave}`).classList.toggle('oculto', !ativa);
+    const botao = document.querySelector(`.aba[data-aba="${chave}"]`);
+    if (ativa) botao.setAttribute('aria-current', 'page');
+    else botao.removeAttribute('aria-current');
+    if (ativa) {
+      $('titulo').textContent = aba.titulo;
+      $('subtitulo').textContent = aba.subtitulo;
+    }
+  }
+
+  // Campos que não valem para a aba aberta somem. O mapa de oportunidades é
+  // sempre de caixa: deixar o seletor de regime na tela sugeriria que ele muda
+  // a análise, e a escolha dos gráficos não é dele.
+  for (const campo of document.querySelectorAll('.so-financeiro')) {
+    campo.classList.toggle('oculto', id !== 'financeiro');
+  }
+
+  limparErro();
+  if (history.replaceState) history.replaceState(null, '', `#${id}`);
+
+  if (buscar && !ABAS[id].carregado() && $('token').value) void ABAS[id].carregar();
+}
+
+for (const botao of document.querySelectorAll('.aba')) {
+  botao.addEventListener('click', () => trocarAba(botao.dataset.aba));
+}
+window.addEventListener('hashchange', () => trocarAba(location.hash.slice(1)));
 
 function periodoPadrao() {
   const hoje = new Date();
@@ -264,94 +642,824 @@ function renderizarNaoClassificado(dre) {
 
 // ---------- Gráficos ----------
 
-let graficoCaixa, graficoDre;
+const graficos = {};
 
-const corDoTema = () =>
-  getComputedStyle(document.documentElement).getPropertyValue('--suave').trim();
-const bordaDoTema = () =>
-  getComputedStyle(document.documentElement).getPropertyValue('--borda').trim();
+/**
+ * Última resposta da API. Guardada para redesenhar na troca de tema ou ao ligar
+ * um gráfico, sem refazer a busca — que, em produção, é uma ida à Omie.
+ * `mensal` só é buscado quando a matriz está ligada: é uma requisição a mais.
+ */
+const dados = { dre: null, fluxo: null, mensal: null, oportunidades: null };
 
-function eixos() {
+/**
+ * Cores categóricas para a rosca, na ordem fixa da paleta validada. A ordem é o
+ * mecanismo de segurança sob daltonismo, não enfeite: fatias vizinhas precisam
+ * dos pares que passaram no teste. Nunca gerar uma sétima cor — o excedente
+ * vira "Outros".
+ */
+const CATEGORICAS = [
+  ['#2a78d6', '#3987e5'],
+  ['#eb6834', '#d95926'],
+  ['#1baf7a', '#199e70'],
+  ['#eda100', '#c98500'],
+  ['#e87ba4', '#d55181'],
+  ['#008300', '#008300'],
+];
+
+const temaEscuro = () =>
+  document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : preferenciaDoSistema.matches;
+
+const categorica = (i) => CATEGORICAS[i % CATEGORICAS.length][temaEscuro() ? 1 : 0];
+
+/** Cor vinda do CSS, para o gráfico seguir o tema em vez de repetir hex. */
+const cor = (nome) =>
+  getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
+
+/** Rótulos e grade recuam; quem tem que aparecer é o dado. */
+const eixoCategoria = () => ({
+  ticks: { color: cor('--suave') },
+  grid: { display: false },
+  border: { color: cor('--borda') },
+});
+const eixoValor = (horizontal) => ({
+  ticks: {
+    color: cor('--suave'),
+    callback: (v) => moedaCurta(v),
+    // Sem isso o Chart.js inclina os rótulos quando o painel aperta, e
+    // "R$ 20 mil" na diagonal colide com o vizinho.
+    maxRotation: 0,
+    autoSkip: true,
+    maxTicksLimit: horizontal ? 6 : 8,
+  },
+  grid: { color: cor('--borda'), lineWidth: 1 },
+  border: { display: !horizontal, color: cor('--borda') },
+});
+
+const BASE = {
+  maintainAspectRatio: false,
+  // Barras finas com a ponta arredondada só do lado do dado; a base fica
+  // encostada no eixo.
+  elements: { bar: { borderRadius: 4, borderSkipped: 'start' } },
+};
+
+/** Comum às barras horizontais: espaço para o rótulo da ponta e barra fina. */
+const HORIZONTAL = {
+  indexAxis: 'y',
+  layout: { padding: { right: 68 } },
+  barPercentage: 0.62,
+  categoryPercentage: 0.82,
+};
+
+/** Mostra ou esconde a camada de "sem dados" sem destruir o canvas. */
+function alternarVazio(id, vazio) {
+  $(`${id}-vazio`).classList.toggle('oculto', !vazio);
+  return vazio;
+}
+
+function desenhar(id, config) {
+  graficos[id]?.destroy();
+  graficos[id] = new Chart($(id), config);
+}
+
+/**
+ * Escreve o valor na ponta de cada barra.
+ *
+ * Não é enfeite: o par entrada/saída fica na faixa-piso sob daltonismo, e a
+ * regra é que a cor nunca seja o único canal. Com o número na barra, o gráfico
+ * continua legível mesmo para quem não distingue as duas cores.
+ */
+const rotulosNaPonta = {
+  id: 'rotulosNaPonta',
+  afterDatasetsDraw(grafico) {
+    const { ctx } = grafico;
+    const valores = grafico.data.datasets[0].data;
+
+    ctx.save();
+    // Texto veste cor de texto, nunca a cor da série.
+    ctx.fillStyle = cor('--suave');
+    ctx.font = '600 11px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textBaseline = 'middle';
+
+    grafico.getDatasetMeta(0).data.forEach((barra, i) => {
+      const bruto = valores[i];
+      // Barra flutuante da cascata chega como [início, fim].
+      const valor = Array.isArray(bruto) ? bruto[1] - bruto[0] : bruto;
+      if (valor === 0) return;
+
+      const cresceParaDireita = barra.x >= barra.base;
+      ctx.textAlign = cresceParaDireita ? 'left' : 'right';
+      ctx.fillText(moedaCurta(valor), barra.x + (cresceParaDireita ? 6 : -6), barra.y);
+    });
+
+    ctx.restore();
+  },
+};
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/**
+ * Um ano de movimento vira 350 barras diárias, que não se lê. Acima de ~10
+ * semanas o gráfico passa a agregar por mês; o saldo acumulado continua sendo
+ * o do último dia de cada mês, não a soma.
+ */
+function agruparFluxo(dias) {
+  if (dias.length <= 70) {
+    return {
+      unidade: 'dia',
+      rotulos: dias.map((d) => `${d.data.slice(8)}/${d.data.slice(5, 7)}`),
+      entradas: dias.map((d) => d.entradasCentavos),
+      saidas: dias.map((d) => -d.saidasCentavos),
+      acumulado: dias.map((d) => d.saldoAcumuladoCentavos),
+    };
+  }
+
+  const meses = new Map();
+  for (const d of dias) {
+    const chave = d.data.slice(0, 7);
+    const mes = meses.get(chave) ?? { entradas: 0, saidas: 0, acumulado: 0 };
+    mes.entradas += d.entradasCentavos;
+    mes.saidas += d.saidasCentavos;
+    mes.acumulado = d.saldoAcumuladoCentavos;
+    meses.set(chave, mes);
+  }
+
+  const chaves = [...meses.keys()].sort();
   return {
-    x: { ticks: { color: corDoTema() }, grid: { color: bordaDoTema() } },
-    y: {
-      ticks: { color: corDoTema(), callback: (v) => brl.format(v / 100) },
-      grid: { color: bordaDoTema() },
-    },
+    unidade: 'mês',
+    rotulos: chaves.map((c) => `${MESES[Number(c.slice(5)) - 1]}/${c.slice(2, 4)}`),
+    entradas: chaves.map((c) => meses.get(c).entradas),
+    saidas: chaves.map((c) => -meses.get(c).saidas),
+    acumulado: chaves.map((c) => meses.get(c).acumulado),
   };
 }
 
-function renderizarGraficoCaixa(fluxo) {
-  graficoCaixa?.destroy();
+/** Apaga o gráfico e mostra a camada de "sem dados". */
+function semDados(id) {
+  alternarVazio(id, true);
+  graficos[id]?.destroy();
+  delete graficos[id];
+}
 
-  if (fluxo.dias.length === 0) {
-    $('g-caixa').parentElement.innerHTML = '<div class="vazio">Sem movimento no período.</div>';
-    return;
-  }
+function renderizarFluxo() {
+  const fluxo = dados.fluxo;
+  if (fluxo.dias.length === 0) return semDados('g-caixa');
+  alternarVazio('g-caixa', false);
 
-  graficoCaixa = new Chart($('g-caixa'), {
+  const g = agruparFluxo(fluxo.dias);
+  $('nota-g-caixa').textContent =
+    `Entradas acima da linha, saídas abaixo. Agrupado por ${g.unidade}.`;
+
+  desenhar('g-caixa', {
     data: {
-      labels: fluxo.dias.map((d) => d.data.slice(8) + '/' + d.data.slice(5, 7)),
+      labels: g.rotulos,
       datasets: [
-        { type: 'bar', label: 'Entradas', data: fluxo.dias.map((d) => d.entradasCentavos), backgroundColor: '#3fa06a' },
-        { type: 'bar', label: 'Saídas', data: fluxo.dias.map((d) => -d.saidasCentavos), backgroundColor: '#d1685c' },
+        { type: 'bar', label: 'Entradas', data: g.entradas, backgroundColor: cor('--serie-entrada') },
+        { type: 'bar', label: 'Saídas', data: g.saidas, backgroundColor: cor('--serie-saida') },
         {
-          type: 'line', label: 'Saldo acumulado',
-          data: fluxo.dias.map((d) => d.saldoAcumuladoCentavos),
-          borderColor: '#2b6cb0', backgroundColor: '#2b6cb0',
-          tension: 0.25, pointRadius: 2,
+          type: 'line',
+          label: 'Saldo acumulado',
+          data: g.acumulado,
+          borderColor: cor('--serie-saldo'),
+          backgroundColor: cor('--serie-saldo'),
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
         },
       ],
     },
     options: {
-      maintainAspectRatio: false,
+      ...BASE,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: corDoTema() } },
+        legend: { labels: { color: cor('--suave'), boxWidth: 12, boxHeight: 12, usePointStyle: true } },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${moeda(Math.abs(c.raw))}` } },
       },
-      scales: eixos(),
+      scales: { x: eixoCategoria(), y: eixoValor(false) },
     },
   });
 }
 
-function renderizarGraficoDRE(dre) {
-  graficoDre?.destroy();
+/**
+ * Passos da cascata: os filhos de cada raiz, que somados dão o resultado.
+ *
+ * Usa os filhos e não as raízes porque três barras contam pouco; e fecha a
+ * conta somando um passo "(direto)" quando uma raiz recebeu lançamento próprio,
+ * para a última barra ser mesmo o resultado e não uma aproximação.
+ */
+function passosDaCascata(dre) {
+  const passos = [];
 
-  // Nível 2 é o recorte que informa sem virar sopa de letrinhas: receita
-  // líquida, custos, despesas fixas e variáveis, investimentos.
-  const nivel2 = achatar(dre.linhas).filter((l) => l.nivel === 2 && l.valorCentavos !== 0);
+  for (const raiz of dre.linhas) {
+    const filhos = raiz.filhos ?? [];
+    if (filhos.length === 0) {
+      if (raiz.valorCentavos !== 0) passos.push({ nome: raiz.descricao, valor: raiz.valorCentavos });
+      continue;
+    }
 
-  if (nivel2.length === 0) {
-    $('g-dre').parentElement.innerHTML = '<div class="vazio">Sem valores apurados no período.</div>';
-    return;
+    for (const filho of filhos) {
+      if (filho.valorCentavos !== 0) passos.push({ nome: filho.descricao, valor: filho.valorCentavos });
+    }
+
+    const somaFilhos = filhos.reduce((s, f) => s + f.valorCentavos, 0);
+    const direto = raiz.valorCentavos - somaFilhos;
+    if (direto !== 0) passos.push({ nome: `${raiz.descricao} (direto)`, valor: direto });
   }
 
-  graficoDre = new Chart($('g-dre'), {
+  return passos;
+}
+
+function renderizarCascata() {
+  const passos = passosDaCascata(dados.dre);
+  if (passos.length === 0) return semDados('g-cascata');
+  alternarVazio('g-cascata', false);
+
+  // Cada barra vai de onde a anterior parou até o novo acumulado.
+  let acumulado = 0;
+  const faixas = passos.map((p) => {
+    const inicio = acumulado;
+    acumulado += p.valor;
+    return [inicio, acumulado];
+  });
+
+  const cores = passos.map((p) => cor(p.valor >= 0 ? '--serie-entrada' : '--serie-saida'));
+
+  // A última barra é o total: parte do zero e vai até o resultado.
+  faixas.push([0, acumulado]);
+  cores.push(cor('--serie-saldo'));
+
+  desenhar('g-cascata', {
     type: 'bar',
     data: {
-      labels: nivel2.map((l) => l.descricao),
+      labels: [...passos.map((p) => p.nome), 'Resultado do período'],
+      datasets: [{ label: 'Valor', data: faixas, backgroundColor: cores }],
+    },
+    options: {
+      ...BASE,
+      ...HORIZONTAL,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: (c) => moeda(c.raw[1] - c.raw[0]) },
+        },
+      },
+      scales: { x: eixoValor(true), y: eixoCategoria() },
+    },
+    plugins: [rotulosNaPonta],
+  });
+}
+
+/**
+ * As maiores linhas que subtraem do resultado.
+ *
+ * Só folhas: um totalizador ao lado dos próprios filhos contaria o mesmo
+ * dinheiro duas vezes no gráfico. Uma série só, uma cor só — o comprimento da
+ * barra já é a informação, e pintar cada uma de um tom diferente gastaria o
+ * único canal livre com algo que o gráfico já mostra.
+ */
+/** Folhas de um lado só do DRE, da maior para a menor em magnitude. */
+function folhasDoLado(dre, negativas) {
+  return achatar(dre.linhas)
+    .filter(
+      (l) =>
+        (l.filhos ?? []).length === 0 &&
+        (negativas ? l.valorCentavos < 0 : l.valorCentavos > 0),
+    )
+    .sort((a, b) => Math.abs(b.valorCentavos) - Math.abs(a.valorCentavos));
+}
+
+function renderizarSaidas() {
+  const folhas = folhasDoLado(dados.dre, true).slice(0, 10);
+  if (folhas.length === 0) return semDados('g-saidas');
+  alternarVazio('g-saidas', false);
+
+  desenhar('g-saidas', {
+    type: 'bar',
+    data: {
+      labels: folhas.map((l) => l.descricao),
       datasets: [
         {
-          label: 'Valor',
-          data: nivel2.map((l) => l.valorCentavos),
-          backgroundColor: nivel2.map((l) => (l.valorCentavos >= 0 ? '#3fa06a' : '#d1685c')),
+          label: 'Saída',
+          // Magnitude: que são saídas já está dito no título do painel.
+          data: folhas.map((l) => Math.abs(l.valorCentavos)),
+          backgroundColor: cor('--serie-saida'),
         },
       ],
     },
     options: {
-      indexAxis: 'y',
-      maintainAspectRatio: false,
+      ...BASE,
+      ...HORIZONTAL,
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: (c) => moeda(c.raw) } },
       },
-      scales: {
-        x: { ticks: { color: corDoTema(), callback: (v) => brl.format(v / 100) }, grid: { color: bordaDoTema() } },
-        y: { ticks: { color: corDoTema() }, grid: { display: false } },
+      scales: { x: eixoValor(true), y: eixoCategoria() },
+    },
+    plugins: [rotulosNaPonta],
+  });
+}
+
+/** Saldo acumulado sozinho: a curva sem as barras em volta. */
+function renderizarSaldo() {
+  const fluxo = dados.fluxo;
+  if (fluxo.dias.length === 0) return semDados('g-saldo');
+  alternarVazio('g-saldo', false);
+
+  const g = agruparFluxo(fluxo.dias);
+
+  desenhar('g-saldo', {
+    type: 'line',
+    data: {
+      labels: g.rotulos,
+      datasets: [
+        {
+          label: 'Saldo acumulado',
+          data: g.acumulado,
+          borderColor: cor('--serie-saldo'),
+          backgroundColor: `color-mix(in srgb, ${cor('--serie-saldo')} 16%, transparent)`,
+          borderWidth: 2,
+          fill: 'origin',
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+        },
+      ],
+    },
+    options: {
+      ...BASE,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        // Série única: o título do painel já diz o que é.
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => moeda(c.raw) } },
+      },
+      scales: { x: eixoCategoria(), y: eixoValor(false) },
+    },
+  });
+}
+
+/** Entradas e saídas lado a lado, sem a linha de saldo por cima. */
+function renderizarEntradasSaidas() {
+  const fluxo = dados.fluxo;
+  if (fluxo.dias.length === 0) return semDados('g-es');
+  alternarVazio('g-es', false);
+
+  const g = agruparFluxo(fluxo.dias);
+  $('nota-g-es').textContent = `Uma barra para cada lado, agrupado por ${g.unidade}.`;
+
+  desenhar('g-es', {
+    type: 'bar',
+    data: {
+      labels: g.rotulos,
+      datasets: [
+        { label: 'Entradas', data: g.entradas, backgroundColor: cor('--serie-entrada') },
+        // Positivo aqui: as duas barras crescem para cima e se comparam por altura.
+        { label: 'Saídas', data: g.saidas.map((v) => -v), backgroundColor: cor('--serie-saida') },
+      ],
+    },
+    options: {
+      ...BASE,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: cor('--suave'), boxWidth: 12, boxHeight: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${moeda(c.raw)}` } },
+      },
+      scales: { x: eixoCategoria(), y: eixoValor(false) },
+    },
+  });
+}
+
+/**
+ * Composição das saídas em rosca.
+ *
+ * Parte-do-todo à primeira vista, com no máximo seis fatias — daí em diante as
+ * fatias vizinhas borram e a rosca deixa de responder qualquer pergunta. O que
+ * sobra vira "Outros", nunca uma sétima cor inventada.
+ */
+function renderizarRosca() {
+  const folhas = folhasDoLado(dados.dre, true);
+  if (folhas.length === 0) return semDados('g-rosca');
+  alternarVazio('g-rosca', false);
+
+  const maiores = folhas.slice(0, 5);
+  const resto = folhas.slice(5).reduce((s, l) => s + Math.abs(l.valorCentavos), 0);
+
+  const fatias = maiores.map((l) => ({ nome: l.descricao, valor: Math.abs(l.valorCentavos) }));
+  if (resto > 0) fatias.push({ nome: `Outros (${folhas.length - 5})`, valor: resto });
+
+  const total = fatias.reduce((s, f) => s + f.valor, 0);
+
+  desenhar('g-rosca', {
+    type: 'doughnut',
+    data: {
+      labels: fatias.map((f) => f.nome),
+      datasets: [
+        {
+          data: fatias.map((f) => f.valor),
+          backgroundColor: fatias.map((_, i) => categorica(i)),
+          // Vão da cor do fundo entre as fatias, em vez de um contorno.
+          borderColor: cor('--superficie'),
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      ...BASE,
+      cutout: '58%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            color: cor('--suave'),
+            boxWidth: 12,
+            boxHeight: 12,
+            usePointStyle: true,
+            // O valor vai escrito na legenda: a cor sozinha não informa quanto é.
+            generateLabels: (grafico) =>
+              fatias.map((f, i) => ({
+                text: `${f.nome} — ${moedaCurta(f.valor)} (${Math.round((f.valor / total) * 100)}%)`,
+                fillStyle: categorica(i),
+                strokeStyle: categorica(i),
+                fontColor: cor('--suave'),
+                index: i,
+                hidden: !grafico.getDataVisibility(i),
+              })),
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (c) => `${moeda(c.raw)} (${Math.round((c.raw / total) * 100)}%)`,
+          },
+        },
       },
     },
   });
 }
+
+// ---------- Matriz mês a mês ----------
+
+const MESES_CURTOS = MESES.map((m) => m[0].toUpperCase() + m.slice(1));
+
+const rotuloDoMes = (chave) => `${MESES_CURTOS[Number(chave.slice(5)) - 1]}/${chave.slice(2, 4)}`;
+
+/**
+ * Intensidade da cor da célula, de 0 a 1, relativa à maior magnitude da linha.
+ *
+ * Normalizado **por linha**, não pela matriz inteira: uma linha de tarifas
+ * bancárias ao lado de uma de receita ficaria toda branca numa escala comum, e
+ * é justamente dentro da linha que se quer ver o mês fora da curva.
+ */
+function intensidade(valor, maiorDaLinha) {
+  if (!maiorDaLinha) return 0;
+  return Math.min(1, Math.abs(valor) / maiorDaLinha);
+}
+
+/**
+ * Tinta bem fraca: teto de 15%, piso de 2,5%, com a curva puxada para baixo
+ * (expoente 1,6) para só o extremo da linha pegar tom.
+ *
+ * O teto é a diferença entre um mapa de calor que se lê e um que pesa: numa
+ * tabela cheia, a cor forte da célula compete com o número escrito dentro dela.
+ * A cor aqui é dica de varredura, não a informação — essa está escrita.
+ */
+function fundoDaCelula(valor, maiorDaLinha) {
+  const forca = intensidade(valor, maiorDaLinha);
+  if (forca === 0) return '';
+  const tom = valor >= 0 ? '--serie-entrada' : '--serie-saida';
+  const mistura = (2 + forca ** 1.7 * 9).toFixed(1);
+  return `background: color-mix(in srgb, var(${tom}) ${mistura}%, transparent)`;
+}
+
+function renderizarMatriz() {
+  const mensal = dados.mensal;
+  const alvo = $('matriz-corpo');
+
+  if (!mensal) {
+    alvo.innerHTML = '<div class="vazio-linha">Clique em Carregar para montar a matriz.</div>';
+    return;
+  }
+  if (mensal.meses.length === 0) {
+    alvo.innerHTML = '<div class="vazio-linha">Sem meses no período selecionado.</div>';
+    return;
+  }
+
+  const linhas = achatar(mensal.linhas);
+
+  // Com uma coluna só, toda célula é o máximo da própria linha e sai no tom
+  // mais forte — cor que não gradua nada, só polui. A comparação entre meses é
+  // o ponto da matriz; sem meses para comparar, fica a tabela limpa.
+  const comparaMeses = mensal.meses.length > 1;
+
+  const cabecalho = `<thead><tr>
+      <th class="conta">Conta</th>
+      ${mensal.meses.map((m) => `<th class="num">${rotuloDoMes(m.chave)}</th>`).join('')}
+      <th class="total-linha">Total</th>
+    </tr></thead>`;
+
+  const corpo = linhas
+    .map((l) => {
+      const maior = comparaMeses ? Math.max(...l.valores.map(Math.abs)) : 0;
+      const recuo = (l.nivel - 1) * 16;
+      const classe = l.ehTotalizador ? (l.nivel === 1 ? 'raiz total' : 'total') : '';
+
+      // Número na cor normal de texto: com o fundo já tingido e o "−" na frente,
+      // colorir o número também é o terceiro canal dizendo a mesma coisa — é o
+      // que fazia a tabela pesar.
+      const celulas = l.valores
+        .map(
+          (v, i) =>
+            `<td class="mes" style="${fundoDaCelula(v, maior)}"
+               title="${l.descricao} · ${rotuloDoMes(mensal.meses[i].chave)}: ${moeda(v)}"
+             >${v === 0 ? '—' : moedaCurta(v)}</td>`,
+        )
+        .join('');
+
+      return `<tr class="${classe}">
+        <td class="conta" style="padding-left:${10 + recuo}px">${l.codigo} ${l.descricao}</td>
+        ${celulas}
+        <td class="total-linha ${classeValor(l.totalCentavos)}"><span class="pilula">${moedaCurta(l.totalCentavos)}</span></td>
+      </tr>`;
+    })
+    .join('');
+
+  const rodape = `<tr class="raiz total">
+      <td class="conta">Resultado do mês</td>
+      ${mensal.meses
+        .map((m) => `<td class="mes ${classeValor(m.resultadoCentavos)}">${moedaCurta(m.resultadoCentavos)}</td>`)
+        .join('')}
+      <td class="total-linha ${classeValor(mensal.resultadoCentavos)}"><span class="pilula">${moedaCurta(mensal.resultadoCentavos)}</span></td>
+    </tr>`;
+
+  const legenda = comparaMeses
+    ? `<div class="legenda">
+         <span>Mais negativo</span>
+         <span class="escala">${[-1, -0.6, -0.25, 0, 0.25, 0.6, 1]
+           .map((f) => `<span style="${fundoDaCelula(f, 1)}"></span>`)
+           .join('')}</span>
+         <span>Mais positivo</span>
+         <span>· a cor é relativa à própria linha; o valor está escrito em cada célula.</span>
+       </div>`
+    : `<div class="legenda">Um mês só no período — escolha um intervalo maior para o mapa de calor comparar os meses.</div>`;
+
+  alvo.innerHTML =
+    `<div class="rolagem"><table class="matriz">${cabecalho}<tbody>${corpo}${rodape}</tbody></table></div>` +
+    legenda;
+}
+
+/**
+ * Exporta a matriz como CSV.
+ *
+ * Ponto e vírgula e vírgula decimal: é o que o Excel em português abre em
+ * colunas sem pedir nada. Valor cru em reais, não o rótulo curto do gráfico —
+ * quem baixa a planilha vai somar.
+ */
+function baixarMatrizCSV() {
+  const mensal = dados.mensal;
+  if (!mensal) return;
+
+  const numero = (centavos) => (centavos / 100).toFixed(2).replace('.', ',');
+  const campo = (t) => `"${String(t).replace(/"/g, '""')}"`;
+
+  const linhas = [
+    ['Codigo', 'Conta', ...mensal.meses.map((m) => rotuloDoMes(m.chave)), 'Total'],
+    ...achatar(mensal.linhas).map((l) => [
+      l.codigo,
+      l.descricao,
+      ...l.valores.map(numero),
+      numero(l.totalCentavos),
+    ]),
+    [
+      '',
+      'Resultado do mes',
+      ...mensal.meses.map((m) => numero(m.resultadoCentavos)),
+      numero(mensal.resultadoCentavos),
+    ],
+  ];
+
+  // BOM: sem ele o Excel abre os acentos errados.
+  const csv = '﻿' + linhas.map((l) => l.map(campo).join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `dre-mensal-${mensal.periodo.de}-a-${mensal.periodo.ate}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Mapa de oportunidades ----------
+
+const SELOS = {
+  alta: 'Precisa de ação',
+  media: 'Vale acompanhar',
+  informativa: 'Bom saber',
+};
+
+function renderizarOportunidades() {
+  const mapa = dados.oportunidades;
+  const alvo = $('o-lista');
+
+  $('o-alta').textContent = mapa.resumo.alta;
+  $('o-alta').className = 'valor ' + (mapa.resumo.alta > 0 ? 'neg' : 'zero');
+  $('o-media').textContent = mapa.resumo.media;
+  $('o-info').textContent = mapa.resumo.informativa;
+  $('o-jogo').textContent = moeda(mapa.resumo.emJogoCentavos);
+  $('o-jogo').className = 'valor ' + (mapa.resumo.emJogoCentavos > 0 ? 'neg' : 'zero');
+
+  // Sem achado nenhum a mensagem tem que dizer o que isso significa, e não
+  // deixar a tela vazia parecendo que a busca falhou.
+  if (mapa.itens.length === 0) {
+    alvo.innerHTML = `<div class="painel"><div class="vazio-linha">
+      Nada a apontar neste período: o dinheiro está todo classificado, nenhum mês fechou
+      negativo e o caixa não ficou negativo. Experimente um período maior para a análise
+      ter história com que comparar.
+    </div></div>`;
+    return;
+  }
+
+  const aviso = mapa.diagnostico.precisaMaisMeses
+    ? `<div class="aviso">
+         <h3>Período curto para tendência</h3>
+         <p>Com ${mapa.diagnostico.mesesAnalisados} mês(es) não dá para dizer se uma despesa
+         subiu ou se a margem caiu — seria confundir variação normal com tendência. Escolha
+         pelo menos três meses para essas análises entrarem.</p>
+       </div>`
+    : '';
+
+  alvo.innerHTML =
+    aviso +
+    mapa.itens
+      .map(
+        (item) => `<div class="painel achado ${item.severidade}">
+          <div class="faixa"></div>
+          <div class="corpo">
+            <h3>
+              <span class="selo">${SELOS[item.severidade]}</span>
+              ${item.titulo}
+              ${item.valorCentavos ? `<span class="cifra">${moeda(item.valorCentavos)}</span>` : ''}
+            </h3>
+            <p>${item.achado}</p>
+            <div class="acao"><b>O que fazer:</b> ${item.acao}</div>
+          </div>
+        </div>`,
+      )
+      .join('');
+}
+
+async function carregarOportunidades() {
+  const slug = $('cliente').value;
+  const de = $('de').value;
+  const ate = $('ate').value;
+
+  if (!slug) return mostrarErro('Nenhum cliente selecionado.');
+  if (!de || !ate) return mostrarErro('Informe o período.');
+
+  try { localStorage.setItem('omie.token', $('token').value); } catch {}
+
+  limparErro();
+  $('carregar').disabled = true;
+  $('carregar').textContent = 'Analisando...';
+
+  try {
+    dados.oportunidades = await api(`/clientes/${slug}/oportunidades?de=${de}&ate=${ate}`);
+    renderizarOportunidades();
+  } catch (e) {
+    mostrarErro(e.message);
+  } finally {
+    $('carregar').disabled = false;
+    $('carregar').textContent = 'Carregar';
+  }
+}
+
+// ---------- Registro de gráficos ----------
+
+/**
+ * Cada visualização é uma opção que o usuário liga ou desliga, e a lista de
+ * chips e a de painéis saem daqui — se ficassem escritas em dois lugares,
+ * uma opção nova apareceria em um e faltaria no outro.
+ */
+const GRAFICOS = [
+  {
+    id: 'g-caixa',
+    titulo: 'Fluxo de caixa',
+    nota: 'Entradas acima da linha, saídas abaixo, com o saldo acumulado.',
+    vazio: 'Sem movimento no período.',
+    desenhar: renderizarFluxo,
+  },
+  {
+    id: 'g-saldo',
+    titulo: 'Saldo acumulado',
+    nota: 'A curva do caixa ao longo do período, sem as barras em volta.',
+    vazio: 'Sem movimento no período.',
+    desenhar: renderizarSaldo,
+  },
+  {
+    id: 'g-es',
+    titulo: 'Entradas × saídas',
+    nota: 'Uma barra para cada lado, lado a lado.',
+    vazio: 'Sem movimento no período.',
+    desenhar: renderizarEntradasSaidas,
+  },
+  {
+    id: 'g-cascata',
+    titulo: 'Da receita ao resultado',
+    nota: 'Cada barra parte de onde a anterior terminou. A última é o resultado.',
+    vazio: 'Sem valores apurados no período.',
+    alto: true,
+    desenhar: renderizarCascata,
+  },
+  {
+    id: 'g-saidas',
+    titulo: 'Para onde o dinheiro vai',
+    nota: 'As dez maiores linhas do DRE que subtraem, da maior para a menor.',
+    vazio: 'Nenhuma saída no período.',
+    alto: true,
+    desenhar: renderizarSaidas,
+  },
+  {
+    id: 'g-rosca',
+    titulo: 'Composição das saídas',
+    nota: 'As cinco maiores fatias e o resto agrupado em "Outros".',
+    vazio: 'Nenhuma saída no período.',
+    desenhar: renderizarRosca,
+  },
+  {
+    id: 'matriz',
+    titulo: 'DRE mês a mês',
+    nota: 'Uma coluna por mês, com a cor graduando pela própria linha. Escolha um período de vários meses.',
+    tabela: true,
+    precisaMensal: true,
+    desenhar: renderizarMatriz,
+  },
+];
+
+function montarPaineis() {
+  $('paineis').innerHTML = GRAFICOS.map((g) =>
+    g.tabela
+      ? `<div class="painel oculto" data-gr="${g.id}">
+           <div class="acoes"><button id="baixar-csv" type="button">↓ CSV</button></div>
+           <h2>${g.titulo}</h2>
+           <p class="nota">${g.nota}</p>
+           <div id="matriz-corpo"></div>
+         </div>`
+      : `<div class="painel oculto" data-gr="${g.id}">
+           <h2>${g.titulo}</h2>
+           <p class="nota" id="nota-${g.id}">${g.nota}</p>
+           <div class="grafico${g.alto ? ' alto' : ''}">
+             <canvas id="${g.id}"></canvas>
+             <div class="vazio oculto" id="${g.id}-vazio">${g.vazio}</div>
+           </div>
+         </div>`,
+  ).join('');
+
+  $('escolha').insertAdjacentHTML(
+    'beforeend',
+    GRAFICOS.map(
+      (g) =>
+        `<label class="chip"><input type="checkbox" data-gr="${g.id}">${g.titulo}</label>`,
+    ).join(''),
+  );
+
+  $('baixar-csv').addEventListener('click', baixarMatrizCSV);
+}
+
+/** Quais gráficos estão ligados. Na primeira visita, todos. */
+let visiveis = new Set(GRAFICOS.map((g) => g.id));
+try {
+  const salvos = JSON.parse(localStorage.getItem('omie.graficos') || 'null');
+  if (Array.isArray(salvos)) visiveis = new Set(salvos.filter((id) => GRAFICOS.some((g) => g.id === id)));
+} catch {}
+
+function aplicarVisibilidade() {
+  for (const g of GRAFICOS) {
+    // Escopado em #paineis: o chip do mesmo gráfico também carrega data-gr e
+    // vem antes no documento, então um seletor solto acha o chip, não o painel.
+    $('paineis').querySelector(`[data-gr="${g.id}"]`).classList.toggle('oculto', !visiveis.has(g.id));
+    $('escolha').querySelector(`input[data-gr="${g.id}"]`).checked = visiveis.has(g.id);
+  }
+}
+
+montarPaineis();
+aplicarVisibilidade();
+
+$('escolha').addEventListener('change', async (evento) => {
+  const id = evento.target.dataset?.gr;
+  if (!id) return;
+
+  if (evento.target.checked) visiveis.add(id);
+  else visiveis.delete(id);
+
+  try { localStorage.setItem('omie.graficos', JSON.stringify([...visiveis])); } catch {}
+  aplicarVisibilidade();
+
+  // A matriz custa uma requisição a mais; só é buscada quando alguém liga.
+  if (evento.target.checked && GRAFICOS.find((g) => g.id === id)?.precisaMensal) {
+    await garantirMensal();
+  }
+  redesenhar();
+});
 
 // ---------- Carregamento ----------
 
@@ -364,7 +1472,25 @@ function acharPorCodigo(linhas, codigo) {
   return null;
 }
 
-async function carregar() {
+const consulta = () => `de=${$('de').value}&ate=${$('ate').value}`;
+
+async function garantirMensal() {
+  if (dados.mensal || !dados.dre) return;
+  try {
+    dados.mensal = await api(
+      `/clientes/${$('cliente').value}/dre-mensal?${consulta()}&regime=${$('regime').value}`,
+    );
+  } catch (e) {
+    mostrarErro(`Não foi possível carregar o DRE mês a mês: ${e.message}`);
+  }
+}
+
+/** O botão Carregar serve as duas abas; quem busca é a aba aberta. */
+function carregar() {
+  return ABAS[abaAtual].carregar();
+}
+
+async function carregarFinanceiro() {
   const slug = $('cliente').value;
   const de = $('de').value;
   const ate = $('ate').value;
@@ -380,25 +1506,41 @@ async function carregar() {
 
   try {
     const q = `de=${de}&ate=${ate}`;
-    const [dre, fluxo] = await Promise.all([
+    const pedidos = [
       api(`/clientes/${slug}/dre?${q}&regime=${$('regime').value}`),
       api(`/clientes/${slug}/fluxo-caixa?${q}`),
-    ]);
+    ];
+    // Trocar o período invalida a matriz: mantê-la mostraria os meses antigos.
+    if (visiveis.has('matriz')) {
+      pedidos.push(api(`/clientes/${slug}/dre-mensal?${q}&regime=${$('regime').value}`));
+    }
+
+    const [dre, fluxo, mensal] = await Promise.all(pedidos);
+    dados.dre = dre;
+    dados.fluxo = fluxo;
+    dados.mensal = mensal ?? null;
 
     const receita = acharPorCodigo(dre.linhas, '1.01');
     const despesa = acharPorCodigo(dre.linhas, '2');
+    const receitaCentavos = receita?.valorCentavos ?? 0;
 
-    $('c-receita').textContent = moeda(receita?.valorCentavos ?? 0);
+    $('c-receita').textContent = moeda(receitaCentavos);
     $('c-despesa').textContent = moeda(despesa?.valorCentavos ?? 0);
     $('c-resultado').textContent = moeda(dre.resultadoCentavos);
     $('c-resultado').className = 'valor ' + classeValor(dre.resultadoCentavos);
     $('c-caixa').textContent = moeda(fluxo.saldoPeriodoCentavos);
     $('c-caixa').className = 'valor ' + classeValor(fluxo.saldoPeriodoCentavos);
 
+    // Sem receita não existe margem — mostrar 0% sugeriria empate, não ausência.
+    $('c-margem').textContent =
+      receitaCentavos === 0
+        ? '—'
+        : `${((dre.resultadoCentavos / receitaCentavos) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+    $('c-margem').className = 'valor ' + classeValor(receitaCentavos === 0 ? 0 : dre.resultadoCentavos);
+
     renderizarDRE(dre);
     renderizarNaoClassificado(dre);
-    renderizarGraficoCaixa(fluxo);
-    renderizarGraficoDRE(dre);
+    redesenhar();
   } catch (e) {
     mostrarErro(e.message);
   } finally {
@@ -407,10 +1549,82 @@ async function carregar() {
   }
 }
 
-$('carregar').addEventListener('click', carregar);
+/**
+ * Redesenha os gráficos com os dados já carregados.
+ *
+ * O Chart.js copia as cores no momento em que o gráfico é construído, então
+ * trocar de tema exige reconstruir — não basta repintar o CSS. Reaproveitar a
+ * última resposta evita bater na API (e na Omie) só para mudar de cor.
+ */
+function redesenhar() {
+  if (!dados.dre) return;
+
+  // A matriz é HTML puro: não depende do Chart.js e por isso vem antes.
+  for (const g of GRAFICOS) {
+    if (g.tabela && visiveis.has(g.id)) g.desenhar();
+  }
+
+  // Sem rede até o CDN, a página inteira continua útil: os cartões, a matriz e a
+  // tabela do DRE já estão preenchidos. Só os gráficos faltam, e vale dizer isso
+  // em vez de deixar um "Chart is not defined" na tela.
+  if (typeof Chart === 'undefined') {
+    mostrarErro(
+      'Os gráficos não carregaram: a biblioteca Chart.js não pôde ser baixada. ' +
+        'Os números dos cartões e das tabelas continuam válidos.',
+    );
+    return;
+  }
+
+  for (const g of GRAFICOS) {
+    if (!g.tabela && visiveis.has(g.id)) g.desenhar();
+  }
+}
+
+$('carregar').addEventListener('click', () => void carregar());
+
+/**
+ * Mexer num filtro já busca de novo.
+ *
+ * Ter que clicar em Carregar depois de trocar o regime faz o filtro parecer
+ * quebrado — a tela continua mostrando o número anterior. O botão continua
+ * existindo como recarga explícita.
+ */
+function esquecerTudo() {
+  dados.dre = null;
+  dados.fluxo = null;
+  dados.mensal = null;
+  dados.oportunidades = null;
+}
+
+function aoMudarFiltro(id, { limpaTudo = false } = {}) {
+  $(id).addEventListener('change', () => {
+    // Data pela metade acontece enquanto se digita; não vale ir à Omie por isso.
+    if (!$('de').value || !$('ate').value) return;
+    if (limpaTudo) esquecerTudo();
+    void carregar();
+  });
+}
+
+// Cliente e período valem para as duas abas: mudar um deles invalida o que a
+// outra aba já tinha carregado. Sem isso, trocar o período aqui e voltar para a
+// outra aba mostraria números do período anterior debaixo das datas novas.
+aoMudarFiltro('cliente', { limpaTudo: true });
+aoMudarFiltro('de', { limpaTudo: true });
+aoMudarFiltro('ate', { limpaTudo: true });
+
+// Regime só existe no financeiro, e a matriz mensal é apurada com ele.
+$('regime').addEventListener('change', () => {
+  if (abaAtual !== 'financeiro') return;
+  dados.mensal = null;
+  void carregar();
+});
+
+// A aba sai do hash da URL; sem hash, abre no financeiro. `buscar: false` para
+// não disparar a busca antes de saber se existe cliente e token.
+trocarAba(location.hash.slice(1) || 'financeiro', { buscar: false });
 
 carregarClientes().then((temCliente) => {
-  if (temCliente && $('token').value) carregar();
+  if (temCliente && $('token').value) void carregar();
 });
 </script>
 </body>

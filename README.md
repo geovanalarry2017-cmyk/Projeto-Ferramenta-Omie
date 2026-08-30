@@ -96,6 +96,7 @@ Compare o resultado com o extrato real de um período curto. **Só ligue o cron
 | `npm run clientes -- ativar\|desativar --cliente X` | Liga/desliga o cliente no cron. |
 | `npm run conciliar -- --cliente X --de A --ate B` | Execução manual. `--detalhes` lista o que não fechou. |
 | `npm run conciliar -- --todos --de A --ate B` | Todos os clientes ativos, como o cron faz. |
+| `npm run demo` | Dashboard com dados fictícios, sem banco nem Omie. |
 | `npm run dev` | Servidor com reload. |
 | `npm run build` / `npm start` | Compila e roda a versão de produção. |
 | `npm test` | Testes offline, sem credencial nem banco. |
@@ -116,6 +117,8 @@ escopada por cliente.
 | `GET /clientes/:cliente/conciliacao` | Últimas execuções do cliente. |
 | `GET /clientes/:cliente/conciliacao/:id` | Detalhe. Aceita `?status=REVISAR`. |
 | `GET /clientes/:cliente/dre` | DRE do período. `?de=&ate=&regime=caixa\|competencia`. |
+| `GET /clientes/:cliente/dre-mensal` | O mesmo DRE em matriz, uma coluna por mês (máx. 36). Mesmos parâmetros. |
+| `GET /clientes/:cliente/oportunidades` | Mapa de oportunidades do período. `?de=&ate=`. Sempre regime de caixa. |
 | `GET /clientes/:cliente/fluxo-caixa` | Entradas, saídas e saldo acumulado por dia. `?de=&ate=`. |
 | `POST /clientes/:cliente/cadastros/recarregar` | Descarta o cache do plano de contas (10 min). |
 
@@ -126,12 +129,110 @@ consulta filtra por `cliente_id`, não só pelo id da execução.
 
 ## Dashboard de DRE
 
-Acesse `/` com o servidor no ar. Escolha cliente, período e regime.
+Acesse `/` com o servidor no ar. Escolha cliente, período e regime. O botão de
+sol/lua no canto superior alterna claro e escuro; a escolha fica salva no
+navegador e vence a preferência do sistema operacional nas duas direções. Sem
+escolha salva, vale o sistema.
+
+Sete visualizações, ligadas e desligadas nos chips acima dos painéis. A escolha
+fica salva no navegador — dá para montar a tela com o que cada cliente quer ver:
+
+| Visualização | Responde |
+|---|---|
+| **Fluxo de caixa** | Como o dinheiro entrou e saiu ao longo do tempo, com o saldo acumulado. Agrupa por dia até ~10 semanas e por mês acima disso — um ano em barras diárias não se lê. |
+| **Saldo acumulado** | A mesma curva sozinha, sem as barras em volta. |
+| **Entradas × saídas** | Os dois lados lado a lado, sem a linha de saldo por cima. |
+| **Da receita ao resultado** | Cascata: cada barra parte de onde a anterior terminou, e a soma fecha exata no resultado do período. |
+| **Para onde o dinheiro vai** | As dez maiores linhas que subtraem, da maior para a menor. |
+| **Composição das saídas** | Parte-do-todo em rosca: as cinco maiores fatias e o resto em "Outros" — nunca mais de seis, senão as fatias vizinhas borram. |
+| **DRE mês a mês** | Matriz com uma coluna por mês e mapa de calor, mais o total do período fixo à direita. Exporta em CSV. |
+
+A matriz vem de `GET /clientes/:cliente/dre-mensal`, que busca os movimentos
+**uma vez** e fatia por mês em memória — apurar mês a mês chamando a Omie doze
+vezes seriam doze rodadas numa API que limita taxa por app. Ela só é buscada
+quando o painel está ligado, e a soma das colunas bate com o DRE do período
+inteiro (há teste para isso).
+
+O mapa de calor é de tom fraco de propósito, e o valor está escrito em cada
+célula: a cor é dica de varredura para achar o mês fora da curva, não a
+informação.
+
+As cores passaram por validador (contraste, faixa de luminosidade e separação
+sob daltonismo). Verde x vermelho é inevitavelmente fraco sob protanopia, então
+**a leitura nunca depende só da cor**: entrada fica acima do eixo e saída
+abaixo, cada barra da cascata traz o valor escrito na ponta, e a tabela do DRE
+diz o mesmo em texto.
 
 **Regime de caixa** conta o que foi efetivamente pago (`nValPago`, data de
 pagamento). **Competência** conta o que foi faturado (`nValorTitulo`, data de
 emissão). Um título de R$ 1.000 com R$ 400 pagos aparece como 400 no caixa e
 1.000 na competência.
+
+### Ver o dashboard com números fictícios
+
+```bash
+npm run demo        # http://localhost:3001
+```
+
+Sobe o dashboard **de verdade** alimentado por dados fabricados: sem banco, sem
+credencial, sem `.env` e sem uma única chamada à Omie. Serve para conferir o
+relatório enquanto a conta Omie de desenvolvimento ainda está vazia.
+
+O que é substituído é só a *fonte* dos dados —
+[`montarDRE` e `montarFluxoDeCaixa`](./src/dre/montar.ts) são os mesmos que o
+servidor real chama. Se a conta fechar errado no demo, fecha errado em produção.
+
+Os números são **determinísticos**: o mesmo período devolve sempre os mesmos
+valores, então dá para conferir conta e comparar entre execuções. Os dados
+cobrem de propósito os casos que valem olhar: títulos em aberto (aparecem na
+competência e não no caixa), pagamento parcial, rateio entre categorias,
+despesa fixa mensal e categorias **sem vínculo de DRE**, que acionam o painel
+"Movimentos fora do DRE".
+
+Tudo isso vive em `scripts/`, nunca em `src/` — não existe caminho pelo qual um
+número fake chegue ao relatório de um cliente. A página ganha uma faixa de
+aviso injetada na resposta; `public/index.html` fica intocado.
+
+**Como conferir se o número está certo:** no regime de caixa, o saldo do fluxo
+de caixa mais o total do painel "Movimentos fora do DRE" tem que dar exatamente
+o resultado do DRE. São dois caminhos independentes sobre os mesmos movimentos,
+e eles só fecham se sinal, rateio e recorte de data estiverem certos nos dois.
+Foi essa conta que revelou o rateio de título pago parcialmente entrando no DRE
+de caixa pelo valor cheio.
+
+## Mapa de Oportunidades
+
+A segunda aba da barra lateral. Lê o DRE, o DRE mês a mês e o fluxo de caixa do
+período e devolve **o que merece atenção**, cada achado com o número que o
+sustenta e o que fazer a respeito — sem a linha "o que fazer" é diagnóstico, não
+oportunidade.
+
+O que ele procura hoje:
+
+| Achado | Quando aparece |
+|---|---|
+| Dinheiro fora do DRE | Há categoria sem vínculo de DRE, ou seja, resultado incompleto. |
+| Caixa ficou negativo | O saldo acumulado passou abaixo de zero em algum dia. |
+| Meses no vermelho | Algum mês do período fechou negativo. |
+| Despesa acima do normal | Uma linha subiu 40% ou mais contra a média dos meses anteriores. |
+| Margem caiu | A margem do último mês caiu 5 pontos ou mais contra a média. |
+| Receita concentrada | Uma linha responde por mais da metade da receita. |
+| Onde a negociação rende mais | As três maiores linhas de saída e quanto concentram. |
+
+**Sempre em regime de caixa**, e o seletor de regime some nessa aba: a análise
+fala do dinheiro que de fato entrou e saiu, que é sobre o que dá para agir. Um
+alerta de "caixa negativo" apurado por competência seria sobre dinheiro que
+ninguém viu.
+
+**Com menos de três meses, as análises de tendência não rodam** e a tela diz
+isso. Afirmar que uma despesa "subiu" comparando dois meses é confundir variação
+normal com tendência — e um alerta falso custa a confiança nos verdadeiros.
+
+Os limiares são constantes nomeadas no topo de
+[`src/oportunidades/analisar.ts`](./src/oportunidades/analisar.ts), para dar
+para discutir e ajustar sem caçar número no meio do código. A função é pura e
+testada: cada regra é um julgamento sobre o negócio do cliente, e julgamento sem
+teste vira palpite.
 
 ### A armadilha do vínculo categoria → DRE ⚠️
 
@@ -223,11 +324,18 @@ src/
   db/                  pool, migrations e repositório
   jobs/scheduler.ts    cron diário, todos os clientes (desligado por padrão)
   http/                Express, rotas escopadas por cliente
+  oportunidades/       o que merece atenção nos números, e o que fazer
+    analisar.ts        núcleo puro; os limiares são as constantes do topo
   cli/clientes.ts      cadastro de clientes e mapeamento de contas
   cli/conciliar.ts     execução manual
+
+scripts/
+  dados-fake.ts        dados fictícios no formato da Omie (só demonstração)
+  servidor-demo.ts     o dashboard real servido com esses dados
+  smoke-*.ts           inspeção dos dados crus de um cliente
 ```
 
 ## Ainda não feito
 
-Dashboard de DRE/fluxo de caixa, envio por WhatsApp, assinatura digital,
-escrita de lançamentos na Omie e deploy. Nessa ordem, conforme o briefing.
+Envio por WhatsApp, assinatura digital, escrita de lançamentos na Omie e
+deploy. Nessa ordem, conforme o briefing.
