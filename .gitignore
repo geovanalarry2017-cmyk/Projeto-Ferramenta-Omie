@@ -13,3 +13,7 @@ tmp/
 
 # Artefato solto na pasta, nao faz parte do projeto
 skills-export.zip
+
+# Saida do `npm run previa`: gerada, nao versionada
+Previa-Financeiro-Omie.html
+Previa-Financeiro-Omie.zip
