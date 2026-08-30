@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { pool } from '../db/pool.js';
 import { rotasConciliacao } from './routes/conciliacao.js';
 import { rotasDashboard } from './routes/dashboard.js';
+import { rotasOportunidades } from './routes/oportunidades.js';
 
 // Em dev roda de src/http/, compilado roda de dist/http/ — os dois sobem dois
 // niveis ate a raiz do projeto, onde fica public/.
@@ -55,6 +56,7 @@ export function criarServidor() {
 
   app.use(rotasConciliacao);
   app.use(rotasDashboard);
+  app.use(rotasOportunidades);
 
   // O dashboard e servido pelo mesmo processo: uma peca a menos para hospedar,
   // e sem CORS para configurar.
