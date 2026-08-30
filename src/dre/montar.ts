@@ -1,12 +1,14 @@
 import { deFormatoOmie, type DataISO } from '../lib/dates.js';
 import { paraCentavos } from '../lib/money.js';
-import { mapearCategoriaParaDRE } from '../omie/cadastros.js';
 import type { Categoria, ContaDRE, MovimentoFinanceiro } from '../omie/types.js';
 import type {
   CategoriaNaoClassificada,
   LinhaDRE,
+  LinhaDREMensal,
+  MesDRE,
   Regime,
   ResultadoDRE,
+  ResultadoDREMensal,
   ResultadoFluxoCaixa,
   DiaDeCaixa,
 } from './types.js';
@@ -29,6 +31,28 @@ export interface OpcoesDRE {
   de: DataISO;
   ate: DataISO;
   regime: Regime;
+}
+
+/**
+ * Mapa categoria -> conta do DRE.
+ *
+ * ATENCAO: o vinculo e o campo `codigo_dre`, nunca o codigo da categoria.
+ * As duas numeracoes se parecem mas sao independentes — na conta de teste,
+ * a categoria "1.01.02" e uma receita de servicos, enquanto o DRE "1.01.02" e
+ * a linha de Impostos, que subtrai. Usar o codigo da categoria como se fosse o
+ * do DRE jogaria receita na linha de imposto, silenciosamente.
+ */
+export function mapearCategoriaParaDRE(categorias: Categoria[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+
+  for (const categoria of categorias) {
+    const codigoDRE = categoria.codigo_dre?.trim() || categoria.dadosDRE?.codigoDRE?.trim();
+    if (categoria.codigo && codigoDRE) {
+      mapa.set(categoria.codigo, codigoDRE);
+    }
+  }
+
+  return mapa;
 }
 
 export function montarDRE(
@@ -123,6 +147,130 @@ export function montarDRE(
   };
 }
 
+// ---------------------------------------------------------------------------
+// DRE mes a mes
+// ---------------------------------------------------------------------------
+
+/**
+ * Teto de meses por consulta. Um pedido de 2020 a 2030 montaria 120 colunas
+ * que ninguem le, depois de varrer a lista de movimentos 120 vezes.
+ */
+const MAX_MESES = 36;
+
+/** Ultimo dia do mes, em UTC para o fuso nao empurrar para o dia 30. */
+function ultimoDiaDoMes(ano: number, mes: number): DataISO {
+  return new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10);
+}
+
+/**
+ * Os meses cobertos pelo periodo, cada um recortado pelas pontas: um pedido de
+ * 15/01 a 10/03 devolve janeiro comecando no 15 e marco terminando no 10, para
+ * a soma das colunas bater com o DRE do periodo inteiro.
+ */
+export function mesesNoPeriodo(de: DataISO, ate: DataISO): MesDRE[] {
+  const meses: MesDRE[] = [];
+  let ano = Number(de.slice(0, 4));
+  let mes = Number(de.slice(5, 7));
+
+  while (meses.length < MAX_MESES) {
+    const chave = `${ano}-${String(mes).padStart(2, '0')}`;
+    if (chave > ate.slice(0, 7)) break;
+
+    const primeiro = `${chave}-01`;
+    const ultimo = ultimoDiaDoMes(ano, mes);
+    meses.push({
+      chave,
+      de: primeiro < de ? de : primeiro,
+      ate: ultimo > ate ? ate : ultimo,
+      resultadoCentavos: 0,
+      naoClassificadoCentavos: 0,
+    });
+
+    mes += 1;
+    if (mes > 12) {
+      mes = 1;
+      ano += 1;
+    }
+  }
+
+  return meses;
+}
+
+/**
+ * DRE em matriz: uma coluna por mes, uma linha por conta.
+ *
+ * Reaproveita `montarDRE` mes a mes de proposito, em vez de reimplementar a
+ * apuracao com um agrupamento por mes: duas versoes da mesma regra divergem
+ * com o tempo, e a divergencia apareceria como numero errado, calada. O custo e
+ * varrer a lista de movimentos uma vez por mes, o que e barato perto de buscar
+ * os movimentos na Omie doze vezes.
+ */
+export function montarDREMensal(
+  contasDRE: ContaDRE[],
+  categorias: Categoria[],
+  movimentos: MovimentoFinanceiro[],
+  opcoes: OpcoesDRE,
+): ResultadoDREMensal {
+  const meses = mesesNoPeriodo(opcoes.de, opcoes.ate);
+
+  const porMes = meses.map((mes) => {
+    const apurado = montarDRE(contasDRE, categorias, movimentos, {
+      de: mes.de,
+      ate: mes.ate,
+      regime: opcoes.regime,
+    });
+    mes.resultadoCentavos = apurado.resultadoCentavos;
+    mes.naoClassificadoCentavos = apurado.naoClassificado.totalCentavos;
+    return apurado;
+  });
+
+  return {
+    periodo: { de: opcoes.de, ate: opcoes.ate },
+    regime: opcoes.regime,
+    meses,
+    linhas: mesclarLinhas(porMes.map((m) => m.linhas)),
+    resultadoCentavos: meses.reduce((s, m) => s + m.resultadoCentavos, 0),
+    naoClassificadoCentavos: meses.reduce((s, m) => s + m.naoClassificadoCentavos, 0),
+  };
+}
+
+/**
+ * Junta as arvores mensais numa so, com um vetor de valores por linha.
+ *
+ * As arvores tem a mesma forma porque saem do mesmo plano de contas, mas a
+ * posicao e conferida mesmo assim: se um dia deixarem de bater, um valor de
+ * "Impostos" apareceria na linha de "Receita" sem nada quebrar.
+ */
+function mesclarLinhas(porMes: LinhaDRE[][]): LinhaDREMensal[] {
+  const primeira = porMes[0] ?? [];
+
+  return primeira.map((linha, i) => {
+    const noMes = porMes.map((mes) => {
+      const candidata = mes[i];
+      if (!candidata || candidata.codigo !== linha.codigo) {
+        throw new Error(
+          `Plano de contas inconsistente entre os meses na posicao ${i}: ` +
+            `esperado "${linha.codigo}", veio "${candidata?.codigo ?? 'nada'}".`,
+        );
+      }
+      return candidata;
+    });
+
+    const valores = noMes.map((l) => l.valorCentavos);
+
+    return {
+      codigo: linha.codigo,
+      descricao: linha.descricao,
+      nivel: linha.nivel,
+      ehTotalizador: linha.ehTotalizador,
+      sinal: linha.sinal,
+      valores,
+      totalCentavos: valores.reduce((s, v) => s + v, 0),
+      filhos: mesclarLinhas(noMes.map((l) => l.filhos)),
+    };
+  });
+}
+
 /** Data que define a competencia do movimento, conforme o regime. */
 function dataDoMovimento(movimento: MovimentoFinanceiro, regime: Regime): DataISO | null {
   return deFormatoOmie(
@@ -171,12 +319,46 @@ function ratearPorCategoria(movimento: MovimentoFinanceiro, valorCentavos: numbe
 
   // Se a Omie nao mandou os valores distribuidos, cai para o percentual.
   const soma = distribuidos.reduce((s, d) => s + d.centavos, 0);
-  if (soma > 0) return distribuidos;
+  if (soma > 0) return reescalar(distribuidos, soma, valorCentavos);
 
   return rateios.map((r) => ({
     categoria: r.cCodCateg!,
     centavos: Math.round((valorCentavos * (r.nDistrPercentual ?? 0)) / 100),
   }));
+}
+
+/**
+ * Poe o rateio na escala do valor que de fato entra no DRE.
+ *
+ * Os valores distribuidos que a Omie manda sao os do titulo cheio. No regime de
+ * caixa o que vale e o que foi pago, que pode ser menor: um titulo de 1.000
+ * rateado 70/30 e pago pela metade tem que entrar como 350/150, nao 700/300.
+ *
+ * Sem isso o DRE de caixa conta dinheiro que nao entrou — e so em titulo
+ * rateado, ou seja, um erro pequeno e disperso no meio de um relatorio que
+ * parece certo. O caso sem rateio ja usava o valor pago, o que tornava a
+ * divergencia ainda mais dificil de notar.
+ */
+function reescalar(rateios: Rateio[], soma: number, total: number): Rateio[] {
+  if (soma === total) return rateios;
+
+  const ajustados = rateios.map((r) => ({
+    categoria: r.categoria,
+    centavos: Math.round((r.centavos * total) / soma),
+  }));
+
+  // A sobra do arredondamento vai para a maior fatia: a soma tem que fechar
+  // exata, senao o DRE perde centavos a cada titulo rateado.
+  const diferenca = total - ajustados.reduce((s, r) => s + r.centavos, 0);
+  if (diferenca !== 0) {
+    let maior = 0;
+    for (let i = 1; i < ajustados.length; i += 1) {
+      if (ajustados[i]!.centavos > ajustados[maior]!.centavos) maior = i;
+    }
+    ajustados[maior]!.centavos += diferenca;
+  }
+
+  return ajustados;
 }
 
 /** Codigo do pai: "1.01.01" -> "1.01"; "1" -> null. */

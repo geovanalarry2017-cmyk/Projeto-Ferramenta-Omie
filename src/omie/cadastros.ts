@@ -69,24 +69,6 @@ export async function listarCategorias(credenciais: CredenciaisOmie): Promise<Ca
   return categorias;
 }
 
-/**
- * Mapa categoria -> conta do DRE.
- *
- * ATENCAO: o vinculo e o campo `codigo_dre`, nunca o codigo da categoria.
- * As duas numeracoes se parecem mas sao independentes — na conta de teste,
- * a categoria "1.01.02" e uma receita de servicos, enquanto o DRE "1.01.02" e
- * a linha de Impostos, que subtrai. Usar o codigo da categoria como se fosse o
- * do DRE jogaria receita na linha de imposto, silenciosamente.
- */
-export function mapearCategoriaParaDRE(categorias: Categoria[]): Map<string, string> {
-  const mapa = new Map<string, string>();
-
-  for (const categoria of categorias) {
-    const codigoDRE = categoria.codigo_dre?.trim() || categoria.dadosDRE?.codigoDRE?.trim();
-    if (categoria.codigo && codigoDRE) {
-      mapa.set(categoria.codigo, codigoDRE);
-    }
-  }
-
-  return mapa;
-}
+// O mapa categoria -> conta do DRE vive em `dre/montar.ts`, nao aqui: e funcao
+// pura, e este modulo faz I/O. Deixa-la aqui obrigaria quem so quer apurar um
+// DRE a carregar o cliente HTTP da Omie e a validacao do .env junto.

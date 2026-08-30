@@ -1,5 +1,10 @@
 import { Router, type Response } from 'express';
-import { apurarDRE, apurarFluxoDeCaixa, invalidarCacheCadastros } from '../../dre/service.js';
+import {
+  apurarDRE,
+  apurarDREMensal,
+  apurarFluxoDeCaixa,
+  invalidarCacheCadastros,
+} from '../../dre/service.js';
 import type { Regime } from '../../dre/types.js';
 import {
   exigirToken,
@@ -21,6 +26,20 @@ rotasDashboard.get(
     const regime: Regime = req.query.regime === 'competencia' ? 'competencia' : 'caixa';
 
     res.json(await apurarDRE(req.cliente!.id, periodo.de, periodo.ate, regime));
+  },
+);
+
+rotasDashboard.get(
+  '/clientes/:cliente/dre-mensal',
+  exigirToken,
+  resolverCliente,
+  async (req: RequisicaoComCliente, res: Response): Promise<void> => {
+    const periodo = lerPeriodo(req, res);
+    if (!periodo) return;
+
+    const regime: Regime = req.query.regime === 'competencia' ? 'competencia' : 'caixa';
+
+    res.json(await apurarDREMensal(req.cliente!.id, periodo.de, periodo.ate, regime));
   },
 );
 

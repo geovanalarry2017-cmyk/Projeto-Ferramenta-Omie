@@ -59,6 +59,45 @@ export interface ResultadoDRE {
   };
 }
 
+// ---------- DRE mês a mês ----------
+
+/** Uma coluna da matriz. `de`/`ate` já vêm recortados pelas pontas do período. */
+export interface MesDRE {
+  /** "AAAA-MM". */
+  chave: string;
+  de: DataISO;
+  ate: DataISO;
+  resultadoCentavos: number;
+  naoClassificadoCentavos: number;
+}
+
+export interface LinhaDREMensal {
+  codigo: string;
+  descricao: string;
+  nivel: number;
+  ehTotalizador: boolean;
+  sinal: string;
+  /** Um valor por mês, na mesma ordem de `meses`. Já com o sinal aplicado. */
+  valores: number[];
+  /** Soma dos meses: o valor da linha no período inteiro. */
+  totalCentavos: number;
+  filhos: LinhaDREMensal[];
+}
+
+export interface ResultadoDREMensal {
+  periodo: { de: DataISO; ate: DataISO };
+  regime: Regime;
+  meses: MesDRE[];
+  linhas: LinhaDREMensal[];
+  resultadoCentavos: number;
+  /**
+   * Total que ficou fora do DRE no período. Continua aparecendo aqui pelo mesmo
+   * motivo de sempre: uma matriz que fecha escondendo dinheiro é pior que uma
+   * que avisa estar incompleta.
+   */
+  naoClassificadoCentavos: number;
+}
+
 // ---------- Fluxo de caixa ----------
 
 export interface DiaDeCaixa {

@@ -3,8 +3,13 @@ import type { DataISO } from '../lib/dates.js';
 import { logger } from '../lib/logger.js';
 import { listarCategorias, listarContasDRE } from '../omie/cadastros.js';
 import { listarMovimentos } from '../omie/financas.js';
-import { montarDRE, montarFluxoDeCaixa } from './montar.js';
-import type { Regime, ResultadoDRE, ResultadoFluxoCaixa } from './types.js';
+import { montarDRE, montarDREMensal, montarFluxoDeCaixa } from './montar.js';
+import type {
+  Regime,
+  ResultadoDRE,
+  ResultadoDREMensal,
+  ResultadoFluxoCaixa,
+} from './types.js';
 
 /**
  * Orquestra a apuracao: busca cadastros e movimentos na Omie, e entrega para a
@@ -27,7 +32,12 @@ interface CadastrosEmCache {
 
 const cacheCadastros = new Map<number, CadastrosEmCache>();
 
-async function obterCadastros(clienteId: number) {
+/**
+ * Cadastros de DRE do cliente, com cache. Exportado porque o mapa de
+ * oportunidades apura sobre os mesmos cadastros — e reaproveitar o cache evita
+ * repetir a paginação de categorias, que sozinha são várias chamadas à Omie.
+ */
+export async function obterCadastrosDRE(clienteId: number) {
   const agora = Date.now();
   const emCache = cacheCadastros.get(clienteId);
   if (emCache && emCache.expiraEm > agora) return emCache;
@@ -70,7 +80,7 @@ export async function apurarDRE(
   const cliente = await buscarComCredenciais(clienteId);
   if (!cliente) throw new Error(`Cliente ${clienteId} nao encontrado.`);
 
-  const { contasDRE, categorias } = await obterCadastros(clienteId);
+  const { contasDRE, categorias } = await obterCadastrosDRE(clienteId);
 
   if (contasDRE.length === 0) {
     throw new Error(
@@ -92,6 +102,42 @@ export async function apurarDRE(
       naoClassificados: resultado.naoClassificado.categorias.length,
     },
     'DRE apurado',
+  );
+
+  return resultado;
+}
+
+/**
+ * DRE mês a mês.
+ *
+ * Busca os movimentos **uma vez** para o período inteiro e fatia por mês em
+ * memória. A alternativa — apurar mês a mês chamando a Omie doze vezes — leva
+ * doze rodadas de uma API que limita taxa e serializa chamada por app.
+ */
+export async function apurarDREMensal(
+  clienteId: number,
+  de: DataISO,
+  ate: DataISO,
+  regime: Regime = 'caixa',
+): Promise<ResultadoDREMensal> {
+  const cliente = await buscarComCredenciais(clienteId);
+  if (!cliente) throw new Error(`Cliente ${clienteId} nao encontrado.`);
+
+  const { contasDRE, categorias } = await obterCadastrosDRE(clienteId);
+
+  if (contasDRE.length === 0) {
+    throw new Error(
+      'A Omie deste cliente nao tem plano de contas do DRE cadastrado. ' +
+        'Configure em Financas > DRE antes de apurar.',
+    );
+  }
+
+  const movimentos = await listarMovimentos(cliente.omie, de, ate, regime === 'caixa');
+  const resultado = montarDREMensal(contasDRE, categorias, movimentos, { de, ate, regime });
+
+  logger.info(
+    { cliente: cliente.slug, de, ate, regime, meses: resultado.meses.length },
+    'DRE mensal apurado',
   );
 
   return resultado;

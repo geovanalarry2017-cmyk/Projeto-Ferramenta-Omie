@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { montarDRE, montarFluxoDeCaixa } from '../src/dre/montar.js';
-import type { LinhaDRE } from '../src/dre/types.js';
+import {
+  mesesNoPeriodo,
+  montarDRE,
+  montarDREMensal,
+  montarFluxoDeCaixa,
+} from '../src/dre/montar.js';
+import type { LinhaDRE, LinhaDREMensal } from '../src/dre/types.js';
 import type { Categoria, ContaDRE, MovimentoFinanceiro } from '../src/omie/types.js';
 
 /**
@@ -47,6 +52,15 @@ function acharLinha(linhas: LinhaDRE[], codigo: string): LinhaDRE | undefined {
   for (const linha of linhas) {
     if (linha.codigo === codigo) return linha;
     const achou = acharLinha(linha.filhos, codigo);
+    if (achou) return achou;
+  }
+  return undefined;
+}
+
+function acharMensal(linhas: LinhaDREMensal[], codigo: string): LinhaDREMensal | undefined {
+  for (const linha of linhas) {
+    if (linha.codigo === codigo) return linha;
+    const achou = acharMensal(linha.filhos, codigo);
     if (achou) return achou;
   }
   return undefined;
@@ -142,6 +156,43 @@ describe('montarDRE', () => {
 
     expect(acharLinha(dre.linhas, '1.01.01')?.valorCentavos).toBe(70_000);
     expect(acharLinha(dre.linhas, '2.11.01')?.valorCentavos).toBe(-30_000);
+  });
+
+  it('reduz o rateio na proporcao do que foi pago, no regime de caixa', () => {
+    // Os valores distribuidos vem do titulo cheio (700/300), mas so 500 dos
+    // 1000 entraram. No caixa tem que virar 350/150 — contar 700/300 colocaria
+    // no DRE dinheiro que nao entrou.
+    const parcialRateado: MovimentoFinanceiro = {
+      detalhes: { cCodCateg: '1.01.01', nValorTitulo: 1000, dDtPagamento: '15/08/2026' },
+      resumo: { nValPago: 500 },
+      categorias: [
+        { cCodCateg: '1.01.01', nDistrValor: 700 },
+        { cCodCateg: '2.02.01', nDistrValor: 300 },
+      ],
+    };
+
+    const caixa = montarDRE(CONTAS, CATEGORIAS, [parcialRateado], PERIODO);
+
+    expect(acharLinha(caixa.linhas, '1.01.01')?.valorCentavos).toBe(35_000);
+    expect(acharLinha(caixa.linhas, '2.11.01')?.valorCentavos).toBe(-15_000);
+  });
+
+  it('nao perde centavos ao reescalar um rateio', () => {
+    // 1/3 de 1000 nao e exato: as tres fatias reescaladas tem que somar
+    // exatamente o valor pago, com a sobra caindo na maior.
+    const tercos: MovimentoFinanceiro = {
+      detalhes: { cCodCateg: '1.01.01', nValorTitulo: 1000, dDtPagamento: '15/08/2026' },
+      resumo: { nValPago: 10 },
+      categorias: [
+        { cCodCateg: '1.01.01', nDistrValor: 334 },
+        { cCodCateg: '1.01.01', nDistrValor: 333 },
+        { cCodCateg: '1.01.01', nDistrValor: 333 },
+      ],
+    };
+
+    const caixa = montarDRE(CONTAS, CATEGORIAS, [tercos], PERIODO);
+
+    expect(acharLinha(caixa.linhas, '1.01.01')?.valorCentavos).toBe(1_000);
   });
 
   it('usa o percentual quando o rateio nao traz valor', () => {
@@ -240,6 +291,94 @@ describe('montarDRE', () => {
     expect(dre.resultadoCentavos).toBe(0);
     expect(dre.linhas).toHaveLength(2);
     expect(acharLinha(dre.linhas, '1.01.01')?.valorCentavos).toBe(0);
+  });
+});
+
+describe('mesesNoPeriodo', () => {
+  it('recorta o primeiro e o ultimo mes pelas pontas do periodo', () => {
+    const meses = mesesNoPeriodo('2026-01-15', '2026-03-10');
+
+    expect(meses.map((m) => [m.chave, m.de, m.ate])).toEqual([
+      ['2026-01', '2026-01-15', '2026-01-31'],
+      ['2026-02', '2026-02-01', '2026-02-28'],
+      ['2026-03', '2026-03-01', '2026-03-10'],
+    ]);
+  });
+
+  it('acha o ultimo dia de fevereiro em ano bissexto', () => {
+    expect(mesesNoPeriodo('2028-02-01', '2028-02-29')[0]?.ate).toBe('2028-02-29');
+  });
+
+  it('atravessa a virada do ano', () => {
+    expect(mesesNoPeriodo('2026-11-01', '2027-01-31').map((m) => m.chave)).toEqual([
+      '2026-11',
+      '2026-12',
+      '2027-01',
+    ]);
+  });
+});
+
+describe('montarDREMensal', () => {
+  /** Movimento pago numa data especifica, para cair no mes que se quer testar. */
+  const pago = (data: string, valor: number, categoria = '1.01.01'): MovimentoFinanceiro =>
+    movimento(categoria, valor, { dDtPagamento: data });
+
+  const MENSAL = { de: '2026-01-01', ate: '2026-03-31', regime: 'caixa' as const };
+
+  it('separa os valores por mes', () => {
+    const dre = montarDREMensal(
+      CONTAS,
+      CATEGORIAS,
+      [pago('10/01/2026', 100), pago('20/01/2026', 50), pago('05/03/2026', 700)],
+      MENSAL,
+    );
+
+    expect(dre.meses.map((m) => m.chave)).toEqual(['2026-01', '2026-02', '2026-03']);
+    expect(acharMensal(dre.linhas, '1.01.01')?.valores).toEqual([15_000, 0, 70_000]);
+  });
+
+  it('a soma dos meses fecha com o total da linha e com o resultado', () => {
+    const dre = montarDREMensal(
+      CONTAS,
+      CATEGORIAS,
+      [pago('10/01/2026', 100), pago('05/02/2026', 300), pago('05/03/2026', 700)],
+      MENSAL,
+    );
+
+    const linha = acharMensal(dre.linhas, '1.01.01');
+    expect(linha?.totalCentavos).toBe(110_000);
+    expect(linha?.valores.reduce((s, v) => s + v, 0)).toBe(linha?.totalCentavos);
+    expect(dre.meses.reduce((s, m) => s + m.resultadoCentavos, 0)).toBe(dre.resultadoCentavos);
+  });
+
+  it('bate com o DRE do periodo inteiro apurado de uma vez', () => {
+    // A matriz nao pode contar dinheiro diferente do relatorio simples: se
+    // divergir, uma das duas telas esta mentindo e nao da para saber qual.
+    const movimentos = [
+      pago('10/01/2026', 100),
+      pago('28/02/2026', 250, '2.01.01'),
+      pago('31/03/2026', 700),
+    ];
+
+    const mensal = montarDREMensal(CONTAS, CATEGORIAS, movimentos, MENSAL);
+    const inteiro = montarDRE(CONTAS, CATEGORIAS, movimentos, MENSAL);
+
+    expect(mensal.resultadoCentavos).toBe(inteiro.resultadoCentavos);
+    expect(acharMensal(mensal.linhas, '1.01')?.totalCentavos).toBe(
+      acharLinha(inteiro.linhas, '1.01')?.valorCentavos,
+    );
+  });
+
+  it('mantem o que ficou fora do DRE visivel', () => {
+    const dre = montarDREMensal(
+      CONTAS,
+      CATEGORIAS,
+      [pago('10/01/2026', 100, '9.99.99')],
+      MENSAL,
+    );
+
+    expect(dre.naoClassificadoCentavos).toBe(10_000);
+    expect(dre.meses[0]?.naoClassificadoCentavos).toBe(10_000);
   });
 });
 
