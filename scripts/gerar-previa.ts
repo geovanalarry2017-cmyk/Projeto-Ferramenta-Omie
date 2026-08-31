@@ -157,10 +157,6 @@ window.fetch = async (caminho) => {
     headers: { 'Content-Type': 'application/json' },
   });
 };
-
-// A pagina so busca sozinha se houver token preenchido. Aqui ele nao protege
-// nada: nao existe servidor do outro lado.
-document.getElementById('token').value = 'previa';
 </script>`;
 }
 
@@ -182,8 +178,22 @@ const SCRIPT_FINAL = `
   }
 
   // Token e um detalhe de infraestrutura; numa reuniao comercial parece uma
-  // barreira de acesso.
-  document.getElementById('token').closest('.campo').remove();
+  // barreira de acesso. Some da tela, mas continua no DOM: a pagina le
+  // \`$('token').value\` no boot, na troca de aba e a cada carga, e a leitura da
+  // troca de aba nao esta protegida — com o campo removido, a aba do Mapa de
+  // Oportunidades abre vazia e o erro fica so no console.
+  const token = document.getElementById('token');
+  token.value = 'previa';
+  token.closest('.campo').classList.add('oculto');
+
+  // A carga e refeita aqui porque a da pagina ja desistiu. Ela so busca se
+  // houver token, e o script da pagina zera o campo com o localStorage (vazio,
+  // num arquivo aberto de file://) depois de qualquer valor que a previa
+  // coloque antes dele. Sem isto a tela monta inteira e nenhum numero aparece:
+  // cartoes em "—" e tabelas vazias, sem nada indicando que faltou algo.
+  carregarClientes().then((temCliente) => {
+    if (temCliente) void carregar();
+  });
 
   const nota = document.createElement('div');
   nota.className = 'sub';
@@ -195,13 +205,15 @@ const SCRIPT_FINAL = `
 })();
 </script>`;
 
-async function gerar(): Promise<void> {
-  const de = (lerArgumento('de') ?? '2026-01-01') as DataISO;
-  const ate = (lerArgumento('ate') ?? '2026-08-31') as DataISO;
-  // Na raiz do projeto, e nao em dist/: o arquivo existe para ser achado e
-  // anexado num e-mail. Enterrado numa pasta de build, ninguem acha.
-  const saida = lerArgumento('saida') ?? join(RAIZ, 'Previa-Financeiro-Omie.html');
-
+/**
+ * Monta o HTML da previa e devolve como texto.
+ *
+ * Separado da escrita em disco para o teste conseguir carregar a pagina num DOM
+ * e conferir que os numeros chegam na tela. E o unico jeito de pegar a falha que
+ * importa aqui: a previa monta a tela inteira mesmo quando nenhum dado carrega,
+ * entao o arquivo parece certo em qualquer inspecao de texto.
+ */
+export async function montarPrevia(de: DataISO, ate: DataISO): Promise<string> {
   const [pagina, chartjs] = await Promise.all([
     readFile(join(RAIZ, 'public', 'index.html'), 'utf8'),
     obterChartJS(),
@@ -229,7 +241,7 @@ async function gerar(): Promise<void> {
   // e o layout em flex da pagina colapsa — a tela abre em branco. O charset
   // precisa vir como meta: o arquivo vai ser aberto de file:// e por anexo de
   // e-mail, onde nao existe cabecalho HTTP dizendo que e UTF-8.
-  const html = [
+  return [
     '<!doctype html>',
     '<html lang="pt-BR">',
     '<head>',
@@ -244,6 +256,16 @@ async function gerar(): Promise<void> {
     '</body>',
     '</html>',
   ].join('\n');
+}
+
+async function gerar(): Promise<void> {
+  const de = (lerArgumento('de') ?? '2026-01-01') as DataISO;
+  const ate = (lerArgumento('ate') ?? '2026-08-31') as DataISO;
+  // Na raiz do projeto, e nao em dist/: o arquivo existe para ser achado e
+  // anexado num e-mail. Enterrado numa pasta de build, ninguem acha.
+  const saida = lerArgumento('saida') ?? join(RAIZ, 'Previa-Financeiro-Omie.html');
+
+  const html = await montarPrevia(de, ate);
 
   await mkdir(dirname(saida), { recursive: true });
   await writeFile(saida, html, 'utf8');
@@ -254,4 +276,5 @@ async function gerar(): Promise<void> {
   console.log('  Arquivo único, sem servidor e sem internet — abre com clique duplo.\n');
 }
 
-await gerar();
+// Só como CLI. O teste importa `montarPrevia` e nao quer gerar arquivo nenhum.
+if (import.meta.main) await gerar();
