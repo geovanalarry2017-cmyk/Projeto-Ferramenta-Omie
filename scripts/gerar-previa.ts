@@ -225,11 +225,24 @@ async function gerar(): Promise<void> {
 
   corpo = corpo.replace('<div class="container">', `<div class="container">${FAIXA}`);
 
+  // Documento completo, com doctype. Sem ele o Chrome renderiza em modo quirks
+  // e o layout em flex da pagina colapsa — a tela abre em branco. O charset
+  // precisa vir como meta: o arquivo vai ser aberto de file:// e por anexo de
+  // e-mail, onde nao existe cabecalho HTTP dizendo que e UTF-8.
   const html = [
+    '<!doctype html>',
+    '<html lang="pt-BR">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<title>Painel Financeiro Omie</title>',
     estilo,
     `<script>${seguroEmScript(chartjs)}</script>`,
+    '</head>',
+    '<body>',
     corpo,
+    '</body>',
+    '</html>',
   ].join('\n');
 
   await mkdir(dirname(saida), { recursive: true });
