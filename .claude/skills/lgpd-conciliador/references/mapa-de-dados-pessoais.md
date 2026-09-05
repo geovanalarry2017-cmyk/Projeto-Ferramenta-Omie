@@ -19,6 +19,7 @@ Legenda de base legal: ver `references/postura.md`.
 | `slug`, `nome` | sim (nome empresarial / possível nome de pessoa) | Cliente | V | enquanto durar o contrato + prazo contábil | — |
 | `omie_app_key_cif`, `omie_app_secret_cif`, `pluggy_client_id_cif`, `pluggy_client_secret_cif` | segredo de acesso | Cliente | V | eliminar no encerramento (art. 15) | cifrado AES-256-GCM, chave em `CREDENCIAIS_CHAVE` fora do banco |
 | `ativo`, `criado_em`, `atualizado_em` | não | — | — | — | metadados |
+| `adendo_lgpd_versao`, `adendo_lgpd_aceito_em` | não (metadado contratual) | — | — | enquanto durar o contrato | registro do aceite do adendo de operador (art. 39); enquanto nulo o cliente não é ativado nem processado |
 
 ## `cliente_conta`
 

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { buscarPorSlug } from '../clientes/repository.js';
 import type { ClienteResumo } from '../clientes/types.js';
 import { env } from '../config/env.js';
+import { adendoLgpdPendente } from '../lib/adendo.js';
 import { compararSegredos } from '../lib/cripto.js';
 
 /** O cliente resolvido pela rota, anexado a requisicao. */
@@ -48,6 +49,21 @@ export async function resolverCliente(
   const cliente = await buscarPorSlug(slug);
   if (!cliente) {
     res.status(404).json({ erro: `Cliente "${slug}" nao encontrado.` });
+    return;
+  }
+
+  // Toda rota de dados processa dados pessoais do cliente. Cliente inativo nao
+  // e processado — e o caso mais comum e o adendo LGPD ainda nao registrado.
+  if (!cliente.ativo) {
+    const pendente = adendoLgpdPendente({
+      versao: cliente.adendoLgpdVersao,
+      aceitoEm: cliente.adendoLgpdAceitoEm,
+    });
+    res.status(403).json({
+      erro: pendente
+        ? `Cliente "${slug}": adendo LGPD de operador nao registrado. Tratamento bloqueado ate o aceite.`
+        : `Cliente "${slug}" esta desativado.`,
+    });
     return;
   }
 

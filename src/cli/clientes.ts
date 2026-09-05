@@ -8,6 +8,7 @@ import {
   listarClientes,
   listarContas,
   mapearConta,
+  registrarAceiteAdendo,
 } from '../clientes/repository.js';
 import { encerrarPool } from '../db/pool.js';
 import { listarContasCorrentes } from '../omie/financas.js';
@@ -77,6 +78,7 @@ async function comandoListar(): Promise<void> {
         Slug: c.slug,
         Nome: c.nome,
         Ativo: c.ativo ? 'sim' : 'nao',
+        Adendo: c.adendoLgpdAceitoEm ? c.adendoLgpdVersao : 'pendente',
         Contas: (await listarContas(c.id, false)).length,
         Desde: c.criadoEm.toISOString().slice(0, 10),
       })),
@@ -142,9 +144,33 @@ async function comandoCriar(slug?: string, nome?: string): Promise<void> {
     pluggy: { clientId, clientSecret },
   });
 
-  console.log(`\nCliente "${cliente.slug}" criado (id ${cliente.id}).`);
+  console.log(`\nCliente "${cliente.slug}" criado (id ${cliente.id}) — INATIVO.`);
+  console.log(
+    'Nao processa dados enquanto o adendo LGPD de operador nao for registrado:',
+  );
+  console.log(`  npm run clientes -- aceite --cliente ${cliente.slug} --versao <versao assinada>`);
   console.log('Proximo passo — descobrir as contas:');
   console.log(`  npm run clientes -- contas --cliente ${cliente.slug} --item <itemIdDoPluggy>\n`);
+}
+
+/** Registra o aceite do adendo LGPD e ativa o cliente para tratamento. */
+async function comandoAceite(slug?: string, versao?: string): Promise<void> {
+  const cliente = await exigirCliente(slug);
+
+  if (!versao || !versao.trim()) {
+    throw new Error(
+      'Informe --versao <versao do adendo LGPD assinado>. Ex: --versao v1 ' +
+        '(a data do aceite e gravada agora, automaticamente).',
+    );
+  }
+
+  await registrarAceiteAdendo(cliente.id, versao);
+  await definirAtivo(cliente.id, true);
+
+  console.log(
+    `\nAdendo LGPD "${versao.trim()}" registrado para "${cliente.slug}". ` +
+      'Cliente ativado para tratamento.\n',
+  );
 }
 
 /** Mostra os dois lados que precisam ser ligados: contas da Omie e do Pluggy. */
@@ -233,6 +259,7 @@ async function principal(): Promise<void> {
       conta: { type: 'string' },
       omie: { type: 'string' },
       apelido: { type: 'string' },
+      versao: { type: 'string' },
     },
   });
 
@@ -243,6 +270,8 @@ async function principal(): Promise<void> {
       return comandoListar();
     case 'criar':
       return comandoCriar(values.slug, values.nome);
+    case 'aceite':
+      return comandoAceite(values.cliente, values.versao);
     case 'contas':
       return comandoContas(values.cliente, values.item);
     case 'mapear':
@@ -263,11 +292,12 @@ async function principal(): Promise<void> {
       console.log(`
 Comandos:
   listar                                        lista os clientes
-  criar --slug <s> --nome "<n>"                 cria um cliente e pede as credenciais
+  criar --slug <s> --nome "<n>"                 cria um cliente (INATIVO) e pede as credenciais
+  aceite --cliente <s> --versao <v>             registra o aceite do adendo LGPD e ativa o cliente
   contas --cliente <s> [--item <itemId>]        mostra contas da Omie e do Pluggy
   mapear --cliente <s> --conta <accountId>
          --omie <nCodCC> [--apelido "<a>"]      liga uma conta do banco a uma da Omie
-  ativar | desativar --cliente <s>              liga/desliga o cliente no cron
+  ativar | desativar --cliente <s>              liga/desliga o cliente no cron (ativar exige adendo)
 `);
   }
 }

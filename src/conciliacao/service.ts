@@ -1,6 +1,7 @@
 import type { ClienteComCredenciais, ContaDoCliente } from '../clientes/types.js';
 import { buscarComCredenciais, listarClientes } from '../clientes/repository.js';
 import { env } from '../config/env.js';
+import { adendoLgpdPendente, motivoAdendoPendente } from '../lib/adendo.js';
 import { hojeEmSaoPaulo, somarDias, type DataISO } from '../lib/dates.js';
 import { logger } from '../lib/logger.js';
 import { formatarBRL } from '../lib/money.js';
@@ -72,6 +73,16 @@ export async function executarConciliacao(
 
   if (!cliente) {
     throw new Error(`Cliente ${clienteId} nao encontrado.`);
+  }
+  // Barreira LGPD tambem no caminho direto (CLI `npm run conciliar`, chamada
+  // interna): sem adendo registrado, nao processa. O cron ja so pega ativos.
+  if (
+    adendoLgpdPendente({
+      versao: cliente.adendoLgpdVersao,
+      aceitoEm: cliente.adendoLgpdAceitoEm,
+    })
+  ) {
+    throw new Error(motivoAdendoPendente(cliente.slug));
   }
   if (cliente.contas.length === 0) {
     throw new Error(

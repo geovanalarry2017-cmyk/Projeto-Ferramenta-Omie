@@ -114,8 +114,10 @@ Quando o CLI ganhar `excluir` / `exportar` (backlog P1):
 
 ## 10. Transporte e superfície — art. 46
 
-- Conexão Neon com `sslmode=require` (checar `DATABASE_URL` do ambiente de
-  produção, não do `.env` de dev).
+- Conexão com o Postgres cifrada. `src/config/env.ts` (`superRefine`) recusa o
+  boot em `NODE_ENV=production` se a `DATABASE_URL` não tiver
+  `sslmode=require|verify-ca|verify-full`. Finding: qualquer mudança que
+  afrouxe essa regra ou adicione um caminho de conexão que a contorne.
 - Nenhuma rota de dado sem `exigirToken`. Rota nova em `http/routes/` sem o
   middleware é finding. (Nota de dívida: `API_TOKEN` é único e compartilhado —
   ver backlog P2.)
@@ -127,10 +129,27 @@ Quando o CLI ganhar `excluir` / `exportar` (backlog P1):
 extrato, credencial ou `DATABASE_URL`. Mensagem de erro descreve **o quê** falhou,
 não **com qual dado**.
 
+## 12. Adendo LGPD antes do tratamento — art. 39
+
+Nenhum dado pessoal de um cliente é processado antes do aceite do adendo de
+operador estar registrado (`cliente.adendo_lgpd_versao` +
+`adendo_lgpd_aceito_em`). A regra vive em `src/lib/adendo.ts`
+(`adendoLgpdPendente`), consumida por:
+
+- `criarCliente` — cliente nasce `ativo = false`;
+- `definirAtivo(id, true)` / CLI `ativar` e `aceite` — recusa se pendente;
+- `resolverCliente` (middleware) — 403 em rota de dado se `!cliente.ativo`;
+- `executarConciliacao` — barra o caminho direto (CLI, chamada interna).
+
+Finding: novo entrypoint que lê/processa dados do cliente (rota, job, comando,
+serviço de DRE/oportunidades) sem passar por um desses gates, ou mudança que
+crie cliente já ativo. Recadastro de credenciais e `contas` (onboarding) podem
+rodar antes do aceite — não processam dado de titular.
+
 ---
 
 ## Saída da auditoria
 
 Reportar como o `/code-review` faz: arquivo:linha, invariante violada, artigo,
-cenário concreto de vazamento/violação. Sem finding: dizer que os 11 invariantes
+cenário concreto de vazamento/violação. Sem finding: dizer que os 12 invariantes
 passaram no diff revisado.

@@ -4,6 +4,8 @@
 > cliente e de anexo ao contrato; **não** substitui o aviso de privacidade que
 > cada cliente (controlador) dá aos seus próprios titulares.
 > Preencher `«…»` e publicar no rodapé do dashboard e no material de onboarding.
+> Já existe um rascunho servido em `public/politica-de-privacidade.html`
+> (ligado no rodapé do dashboard) — manter os dois em sincronia ao preencher.
 
 Última atualização: 2026-09-05 — versão v1.
 

@@ -26,6 +26,10 @@ export interface ClienteResumo {
   nome: string;
   ativo: boolean;
   criadoEm: Date;
+  /** Versao do adendo LGPD de operador assinado, ou null enquanto pendente. */
+  adendoLgpdVersao: string | null;
+  /** Quando o aceite do adendo foi registrado, ou null enquanto pendente. */
+  adendoLgpdAceitoEm: Date | null;
 }
 
 /**

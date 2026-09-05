@@ -24,7 +24,13 @@ const obrigatoria = (ondeConseguir: string) =>
     .string({ error: `ausente. ${ondeConseguir}` })
     .min(1, { message: `vazia. ${ondeConseguir}` });
 
-const envSchema = z.object({
+/** TLS exigido na string de conexao — Neon aceita qualquer um destes. */
+const EXIGE_TLS = /[?&]sslmode=(require|verify-ca|verify-full)(&|$)/;
+
+export const envSchema = z
+  .object({
+  NODE_ENV: z.string().optional(),
+
   // As credenciais de Omie e Pluggy NAO ficam aqui: sao por cliente e vivem
   // cifradas no banco (tabela `cliente`). O ambiente guarda so o que e do
   // servidor, valido para todos os clientes.
@@ -51,7 +57,20 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   API_TOKEN: obrigatoria('Invente um valor secreto; protege o disparo via HTTP.'),
-});
+  })
+  .superRefine((cfg, ctx) => {
+    // Em producao o transporte ate o banco tem que ser cifrado (LGPD art. 46-49).
+    // Neon aceita conexao sem TLS se a URL nao pedir — aqui a gente exige.
+    if (cfg.NODE_ENV === 'production' && !EXIGE_TLS.test(cfg.DATABASE_URL)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DATABASE_URL'],
+        message:
+          'em producao a conexao com o Postgres tem que exigir TLS: inclua ' +
+          '"?sslmode=require" na URL (LGPD art. 46-49).',
+      });
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

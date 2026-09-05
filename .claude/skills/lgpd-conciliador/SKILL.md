@@ -28,7 +28,11 @@ Consequências que mudam o que se constrói:
   V) + legítimo interesse (art. 7º, IX). Ver [`references/postura.md`](references/postura.md).
 - **O que vale é o contrato.** Cada onboarding precisa do adendo LGPD de operador
   assinado — é ele que registra a instrução de tratamento. Template em
-  [`assets/adendo-lgpd-operador.md`](assets/adendo-lgpd-operador.md).
+  [`assets/adendo-lgpd-operador.md`](assets/adendo-lgpd-operador.md). O aceite é
+  registrado no banco (`cliente.adendo_lgpd_versao` / `adendo_lgpd_aceito_em`,
+  via `npm run clientes -- aceite`); enquanto não houver, o cliente nasce
+  inativo e nenhum entrypoint processa dados dele (regra em `src/lib/adendo.ts`,
+  invariante 12 da auditoria).
 - **Requisição de titular chega pelo controlador**, nunca direto. O produto tem
   de conseguir cumprir (exportar / corrigir / eliminar) escopado por `cliente_id`.
 
@@ -80,7 +84,7 @@ mapa e da lista de suboperadores. Não entregar o template em branco.
 
 | Pedido | Template |
 |---|---|
-| Política de privacidade | [`assets/politica-de-privacidade.md`](assets/politica-de-privacidade.md) |
+| Política de privacidade | [`assets/politica-de-privacidade.md`](assets/politica-de-privacidade.md) — versão servida (rascunho) já existe em `public/politica-de-privacidade.html`, ligada no rodapé do dashboard; preencher os `«...»` e tirar o aviso de rascunho para publicar |
 | Adendo LGPD de operador (onboarding) | [`assets/adendo-lgpd-operador.md`](assets/adendo-lgpd-operador.md) |
 | Registro de operações de tratamento (ROPA, art. 37) | [`assets/registro-operacoes-tratamento.md`](assets/registro-operacoes-tratamento.md) |
 | Relatório de impacto (RIPD, art. 38) | [`assets/ripd-esqueleto.md`](assets/ripd-esqueleto.md) |

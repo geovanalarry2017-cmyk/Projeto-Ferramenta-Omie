@@ -12,14 +12,19 @@ Ao concluir um item, mover para "Feito" e refletir a mudança no
 
 ## P0 — antes de dados reais em produção (trava o Render)
 
+Código e trava técnica estão prontos. O que resta é **dado real e revisão**, não
+implementação — depende de você / de quem cuida do contrato.
+
 - [ ] **Adendo LGPD de operador assinado no onboarding.** Usar
-  `assets/adendo-lgpd-operador.md`. Sem ele não há instrução de tratamento
-  documentada (art. 39). Uma via por cliente.
-- [ ] **Registrar o aceite do adendo no banco.** Migration: colunas
-  `adendo_lgpd_versao TEXT` e `adendo_lgpd_aceito_em TIMESTAMPTZ` em `cliente`.
-  `npm run clientes -- criar` passa a exigir os dois antes de deixar `ativo=true`;
-  `npm run clientes -- ativar` idem. (Não é consentimento de titular — é o aceite
-  contratual do controlador, versionado. Ver `SKILL.md`.)
+  `assets/adendo-lgpd-operador.md`. Falta: razão social/CNPJ do operador, e a
+  assinatura de cada cliente. A máquina de registrar o aceite já existe (abaixo).
+- [x] **Registrar o aceite do adendo no banco.** Migration
+  `003_lgpd_adendo.sql` (`adendo_lgpd_versao`, `adendo_lgpd_aceito_em` em
+  `cliente`). Regra pura em `src/lib/adendo.ts`. `criarCliente` cria o cliente
+  **inativo**; `npm run clientes -- aceite --cliente <s> --versao <v>` registra o
+  aceite (data via `now()`) e ativa; `definirAtivo`/`ativar` recusam sem o
+  aceite; `resolverCliente` (403) e `executarConciliacao` barram tratamento de
+  cliente inativo. Testes: `tests/adendo.test.ts`. — 2026-09-05
 - [x] **Redação de PII no logger.** `src/lib/redacao.ts` (puro) + fiação no
   `src/lib/logger.ts` via `formatters.log` (objeto) e `hooks.logMethod`
   (mensagem). Mascara CPF, CNPJ, e-mail, telefone e chave PIX aleatória (UUID);
@@ -27,13 +32,21 @@ Ao concluir um item, mover para "Feito" e refletir a mudança no
   `complemento`); `redact.paths` estendido com `DATABASE_URL`, `connectionString`,
   `senha`, `password`, `token`. Testes: `tests/redacao.test.ts` (17) e
   `tests/logger.test.ts` (5). — 2026-09-05
-- [ ] **Política de privacidade publicada.** `assets/politica-de-privacidade.md`
-  preenchida → rodapé do dashboard (`public/index.html`) + material de onboarding.
-- [ ] **Nomear encarregado (DPO) e publicar contato.** Entra na política, no
-  adendo e na ROPA.
+- [ ] **Política de privacidade publicada.** Estrutura pronta: rascunho servido
+  em `public/politica-de-privacidade.html`, ligado no rodapé do dashboard
+  (`public/index.html`). Falta: preencher os `«...»` (razão social, DPO, local do
+  Pluggy), revisar e remover o aviso de rascunho. Manter em sincronia com
+  `assets/politica-de-privacidade.md`.
+- [ ] **Nomear encarregado (DPO) e publicar contato.** Decisão sua. Entra na
+  política (hoje "a definir" no rodapé), no adendo e na ROPA.
 - [ ] **ROPA preenchida** (art. 37) a partir de
-  `assets/registro-operacoes-tratamento.md` + mapa de dados.
-- [ ] **Confirmar `sslmode=require`** na `DATABASE_URL` do Neon de produção.
+  `assets/registro-operacoes-tratamento.md` + mapa de dados. Falta razão
+  social/CNPJ, contato do encarregado e prazo de retenção por controlador.
+- [x] **Exigir `sslmode=require` no banco em produção.** `src/config/env.ts`
+  (`superRefine`) recusa o boot em `NODE_ENV=production` se a `DATABASE_URL` não
+  pedir TLS (`require`/`verify-ca`/`verify-full`). Testes: `tests/env.test.ts`.
+  Ainda cabe conferir, ao criar o Neon de produção, que a string já vem com ele.
+  — 2026-09-05
 
 ## P1 — logo após o go-live
 
@@ -83,3 +96,10 @@ Ao concluir um item, mover para "Feito" e refletir a mudança no
 - Este backlog — 2026-09-05.
 - Redação de PII no logger (`src/lib/redacao.ts` + `src/lib/logger.ts`), com
   testes — 2026-09-05. Ver P0 acima.
+- Máquina do aceite do adendo LGPD: migration `003_lgpd_adendo.sql`,
+  `src/lib/adendo.ts`, `npm run clientes -- aceite`, cliente nasce inativo,
+  tratamento barrado sem aceite (`resolverCliente`, `executarConciliacao`) —
+  2026-09-05.
+- TLS obrigatório no banco em produção (`src/config/env.ts`) — 2026-09-05.
+- Rascunho da política de privacidade servido e ligado no rodapé do dashboard
+  (`public/politica-de-privacidade.html`) — 2026-09-05. Conteúdo ainda pendente.

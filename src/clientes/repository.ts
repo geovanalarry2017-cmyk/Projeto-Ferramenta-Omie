@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { adendoLgpdPendente, motivoAdendoPendente } from '../lib/adendo.js';
 import { cifrar, decifrar, derivarChave } from '../lib/cripto.js';
 import { pool } from '../db/pool.js';
 import type {
@@ -27,6 +28,8 @@ interface LinhaCliente {
   nome: string;
   ativo: boolean;
   criado_em: Date;
+  adendo_lgpd_versao: string | null;
+  adendo_lgpd_aceito_em: Date | null;
   omie_app_key_cif: string;
   omie_app_secret_cif: string;
   pluggy_client_id_cif: string;
@@ -48,6 +51,8 @@ function paraResumo(linha: LinhaCliente): ClienteResumo {
     nome: linha.nome,
     ativo: linha.ativo,
     criadoEm: linha.criado_em,
+    adendoLgpdVersao: linha.adendo_lgpd_versao,
+    adendoLgpdAceitoEm: linha.adendo_lgpd_aceito_em,
   };
 }
 
@@ -62,10 +67,12 @@ function paraConta(linha: LinhaConta): ContaDoCliente {
 }
 
 export async function criarCliente(novo: NovoCliente): Promise<ClienteResumo> {
+  // Nasce inativo: so entra em tratamento depois que o aceite do adendo LGPD
+  // for registrado (registrarAceiteAdendo -> definirAtivo).
   const { rows } = await pool.query<LinhaCliente>(
-    `INSERT INTO cliente (slug, nome, omie_app_key_cif, omie_app_secret_cif,
+    `INSERT INTO cliente (slug, nome, ativo, omie_app_key_cif, omie_app_secret_cif,
                           pluggy_client_id_cif, pluggy_client_secret_cif)
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, false, $3, $4, $5, $6)
      RETURNING *`,
     [
       novo.slug,
@@ -178,7 +185,49 @@ export async function atualizarCredenciais(
   );
 }
 
+/**
+ * Registra o aceite do adendo LGPD de operador no cadastro do cliente.
+ *
+ * Nao e consentimento de titular: e o aceite contratual do controlador,
+ * versionado. A data e gravada agora (`now()`), nunca vem de fora — o que o
+ * chamador informa e so a versao do documento assinado.
+ */
+export async function registrarAceiteAdendo(clienteId: number, versao: string): Promise<void> {
+  const limpa = versao.trim();
+  if (!limpa) throw new Error('Informe a versao do adendo LGPD assinado (ex: v1).');
+
+  const { rowCount } = await pool.query(
+    `UPDATE cliente
+        SET adendo_lgpd_versao    = $2,
+            adendo_lgpd_aceito_em = now(),
+            atualizado_em         = now()
+      WHERE id = $1`,
+    [clienteId, limpa],
+  );
+  if (rowCount === 0) throw new Error(`Cliente ${clienteId} nao encontrado.`);
+}
+
 export async function definirAtivo(clienteId: number, ativo: boolean): Promise<void> {
+  // Ativar e o gatilho do tratamento: sem o adendo LGPD registrado, nao passa.
+  if (ativo) {
+    const { rows } = await pool.query<
+      Pick<LinhaCliente, 'slug' | 'adendo_lgpd_versao' | 'adendo_lgpd_aceito_em'>
+    >(
+      'SELECT slug, adendo_lgpd_versao, adendo_lgpd_aceito_em FROM cliente WHERE id = $1',
+      [clienteId],
+    );
+    const linha = rows[0];
+    if (!linha) throw new Error(`Cliente ${clienteId} nao encontrado.`);
+    if (
+      adendoLgpdPendente({
+        versao: linha.adendo_lgpd_versao,
+        aceitoEm: linha.adendo_lgpd_aceito_em,
+      })
+    ) {
+      throw new Error(motivoAdendoPendente(linha.slug));
+    }
+  }
+
   await pool.query('UPDATE cliente SET ativo = $2, atualizado_em = now() WHERE id = $1', [
     clienteId,
     ativo,
