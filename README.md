@@ -51,6 +51,16 @@ Ele pergunta as quatro credenciais (Omie App Key/Secret, Pluggy Client
 ID/Secret) e as cifra antes de gravar. As credenciais são pedidas no prompt, não
 por argumento — argumento de linha de comando fica no histórico do shell.
 
+O cliente **nasce inativo**. Para processá-lo é preciso registrar o aceite do
+adendo LGPD de operador:
+
+```bash
+npm run clientes -- aceite --cliente acme --versao v1
+```
+
+Sem isso, `ativar` recusa e as rotas de dados respondem `403`. A data do aceite é
+gravada na hora; `--versao` é a versão do documento assinado.
+
 ### 2. Ligue as contas bancárias às contas da Omie
 
 ```bash
@@ -90,7 +100,8 @@ Compare o resultado com o extrato real de um período curto. **Só ligue o cron
 | Comando | O que faz |
 |---|---|
 | `npm run clientes -- listar` | Lista os clientes. |
-| `npm run clientes -- criar --slug X --nome "Y"` | Cadastra cliente e pede as credenciais. |
+| `npm run clientes -- criar --slug X --nome "Y"` | Cadastra cliente (inativo) e pede as credenciais. |
+| `npm run clientes -- aceite --cliente X --versao V` | Registra o aceite do adendo LGPD e ativa o cliente. |
 | `npm run clientes -- contas --cliente X [--item Y]` | Mostra contas da Omie e do Pluggy. |
 | `npm run clientes -- mapear ...` | Liga uma conta do banco a uma da Omie. |
 | `npm run clientes -- ativar\|desativar --cliente X` | Liga/desliga o cliente no cron. |
@@ -111,7 +122,7 @@ escopada por cliente.
 
 | Rota | Descrição |
 |---|---|
-| `GET /health` | Healthcheck (testa o banco). Também serve de alvo para o ping que mantém o free tier do Render acordado. |
+| `GET /health` | Healthcheck: testa o banco (`SELECT 1`). O Render usa como health check do deploy; também serve de alvo para um ping de monitoração externo. |
 | `GET /clientes` | Lista os clientes (sem credenciais). |
 | `POST /clientes/:cliente/conciliacao/executar` | Dispara. Corpo opcional `{"de":"AAAA-MM-DD","ate":"AAAA-MM-DD"}`. Responde **202** e processa em background. |
 | `GET /clientes/:cliente/conciliacao` | Últimas execuções do cliente. |
@@ -335,7 +346,36 @@ scripts/
   smoke-*.ts           inspeção dos dados crus de um cliente
 ```
 
+## Deploy
+
+Hospedagem no [Render](https://render.com) via **Blueprint**: o
+[`render.yaml`](./render.yaml) na raiz descreve o serviço e o Render o cria já
+configurado. Web Service Node no plano **Starter** (sempre no ar, sem cold
+start), região **Oregon**.
+
+- **Banco:** projeto **Neon de produção**, separado do Neon de desenvolvimento
+  que este repositório trata como descartável, na mesma região do serviço. A
+  `DATABASE_URL` precisa terminar em **`?sslmode=require`** — com
+  `NODE_ENV=production` o boot recusa subir sem TLS no banco
+  ([`src/config/env.ts`](./src/config/env.ts)).
+- **Segredos:** `DATABASE_URL`, `CREDENCIAIS_CHAVE` e `API_TOKEN` entram como
+  `sync: false` — preenchidos uma vez no painel do Render, nunca no arquivo. Os
+  de produção são **novos**, gerados na hora; não se reaproveita os de
+  desenvolvimento.
+- **Migrations:** `preDeployCommand` roda `node dist/db/migrate.js` antes de cada
+  troca de instância. São idempotentes (`schema_migrations`).
+- **Cron:** `CRON_ATIVO` fica `false` até uma conciliação manual de período curto
+  ser conferida — ele roda todos os clientes ativos de uma vez.
+- **LGPD:** sem cliente cadastrado, o serviço sobe com o banco vazio e não trata
+  dado pessoal. Um cliente só passa a ser processado depois de
+  `npm run clientes -- aceite --cliente X --versao <adendo>`, que registra o
+  aceite do adendo de operador; antes disso ele nasce inativo e as rotas
+  respondem `403`.
+
+Passo a passo completo — Neon, repositório privado, painel do Render e
+conferência pós-deploy — em [`docs/deploy-render.md`](./docs/deploy-render.md).
+
 ## Ainda não feito
 
-Envio por WhatsApp, assinatura digital, escrita de lançamentos na Omie e
-deploy. Nessa ordem, conforme o briefing.
+Escrita de lançamentos na Omie, envio por WhatsApp e assinatura digital. Nessa
+ordem, conforme o briefing.
