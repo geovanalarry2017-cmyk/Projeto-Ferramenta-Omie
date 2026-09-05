@@ -1,0 +1,58 @@
+# Render Blueprint - Fase 1 do orquestrador Omie.
+# Cria um Web Service Node no plano Starter (sempre no ar, sem cold start).
+#
+# Os segredos NAO ficam aqui. DATABASE_URL, CREDENCIAIS_CHAVE e API_TOKEN
+# entram como `sync: false` e sao preenchidos uma unica vez no painel do Render.
+# Passo a passo completo em docs/deploy-render.md.
+
+services:
+  - type: web
+    name: omie-orquestrador
+    runtime: node
+    plan: starter
+    region: oregon        # alinhe o projeto Neon a esta regiao (AWS us-west-2)
+    branch: master
+    buildCommand: npm ci && npm run build
+    # preDeployCommand roda antes de cada deploy trocar a instancia. As migrations
+    # sao idempotentes (tabela schema_migrations), entao rodar sempre e seguro.
+    # Usa o codigo ja compilado - nao depende de tsx (devDependency).
+    preDeployCommand: node dist/db/migrate.js
+    startCommand: node dist/index.js
+    # /health confere o banco (SELECT 1). Se o banco cair, o Render marca a
+    # instancia como nao saudavel e nao roteia trafego para ela.
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CREDENCIAIS_CHAVE
+        sync: false
+      - key: API_TOKEN
+        sync: false
+      # Liga o modo producao no env.ts: entre outras coisas, recusa subir se a
+      # DATABASE_URL nao exigir TLS (sslmode=require). Explicito de proposito -
+      # nao dependemos do Render setar isso sozinho.
+      - key: NODE_ENV
+        value: production
+      - key: OMIE_BASE_URL
+        value: https://app.omie.com.br/api/v1
+      - key: CONCILIACAO_TOLERANCIA_DIAS
+        value: "2"
+      - key: CONCILIACAO_TOLERANCIA_VALOR_CENTAVOS
+        value: "500"
+      - key: CONCILIACAO_SCORE_MINIMO
+        value: "0.6"
+      - key: CONCILIACAO_JANELA_DIAS
+        value: "3"
+      - key: OMIE_EXTRATO_SINAL_POR_NATUREZA
+        value: "true"
+      # O cron roda TODOS os clientes ativos. So ligar (true) depois de validar
+      # a conciliacao manual de um periodo curto - ver README, secao "Comandos".
+      - key: CRON_ATIVO
+        value: "false"
+      - key: CRON_EXPRESSAO
+        value: "0 3 * * *"
+      - key: CRON_TIMEZONE
+        value: America/Sao_Paulo
+      - key: LOG_LEVEL
+        value: info
