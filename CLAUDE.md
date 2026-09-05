@@ -9,23 +9,27 @@ de projeto e o mapa de `src/`. **Leia-o antes de mexer em qualquer coisa** — e
 arquivo só cobre o que ele não cobre. O briefing original está em
 [`projeto-omie-integracoes.md`](./projeto-omie-integracoes.md).
 
-## Estado atual (01/09/2026)
+## Estado atual (05/09/2026)
 
-Fase 1 entregue e verde: **99 testes em 7 arquivos, `npm run typecheck` limpo.**
+Fase 1 entregue e verde: **132 testes em 11 arquivos, `npm run typecheck` limpo.**
 
-O que está pronto: conciliador bancário, DRE (caixa e competência), DRE mês a mês,
-fluxo de caixa, mapa de oportunidades, dashboard com sete gráficos e tema
-claro/escuro, e a prévia estática (`npm run previa`).
+Pronto: conciliador bancário, DRE (caixa e competência), DRE mês a mês, fluxo de
+caixa, mapa de oportunidades, dashboard com sete gráficos e tema claro/escuro,
+prévia estática (`npm run previa`), redação de PII no log, e a trava técnica do
+adendo LGPD (cliente nasce inativo, não é processado sem o aceite registrado).
 
-**O desenvolvimento está pausado de propósito.** O item pendente é o deploy no
-Render, e ele está travado até os clientes aprovarem layout e proposta — investir
-em infraestrutura antes do aceite arrisca construir para um formato que ainda pode
-mudar. Houve uma reunião de apresentação em 31/08/2026, conduzida por outra pessoa,
-no notebook dela.
+Layout e proposta foram **aprovados na reunião de 31/08/2026, sem pedidos de
+mudança**. O Render foi retomado: `render.yaml` (Blueprint), `.node-version` e
+`docs/deploy-render.md` estão commitados. Faltam só os **passos manuais** — criar
+o Neon de produção, o repositório privado no GitHub e o serviço no painel do
+Render. Runbook em [`docs/deploy-render.md`](./docs/deploy-render.md).
 
-**Antes de propor retomar o Render ou qualquer pendência, pergunte como foi a
-reunião e o que os clientes aprovaram ou pediram para mudar.** Não assuma que o
-sinal verde já veio.
+**Ainda não há cliente real**, e é por isso que o deploy pode subir agora: banco
+vazio, nenhum dado pessoal tratado. Antes do primeiro cliente: ter o CNPJ do
+operador, nomear o encarregado (DPO), preencher a política de privacidade e a
+ROPA, e assinar o adendo com o cliente (registrado por `npm run clientes --
+aceite`). Backlog em [`docs/lgpd-pendencias.md`](./docs/lgpd-pendencias.md);
+contexto na skill `lgpd-conciliador`.
 
 Depois do Render, na ordem do briefing: escrita de lançamentos na Omie, WhatsApp,
 assinatura digital.
@@ -39,6 +43,12 @@ contrata o Pluggy e entrega as credenciais.
 
 **Credenciais de cliente vivem cifradas no banco**, nunca em `.env`, nunca em log.
 Perder `CREDENCIAIS_CHAVE` torna o que está guardado irrecuperável.
+
+**O produto é operador de LGPD; cada cliente é o controlador.** Cliente nasce
+inativo e nenhum entrypoint processa dados dele antes do aceite do adendo estar
+registrado (`src/lib/adendo.ts`; `npm run clientes -- aceite`). PII não vai para
+log — `src/lib/redacao.ts` mascara e o pino está fiado nela. Detalhes e checklist
+de auditoria na skill `lgpd-conciliador`.
 
 **O núcleo é puro e fica puro.** `matcher.ts`, `normalize.ts`, `oportunidades/analisar.ts`
 e `lib/` não fazem I/O. Isso é o que permite calibrar com fixtures sem tocar rede, e
@@ -83,7 +93,9 @@ As contas Omie e Pluggy de agosto/2026 são **só de desenvolvimento**: a Omie e
 praticamente vazia (conta "Caixinha", banco 999, um lançamento previsto) e o Pluggy
 usa o item de sandbox `Pluggy Bank Business` (conector 8, `user-ok`/`password-ok`).
 
-Banco: Postgres no Neon (nuvem) — não há banco local. Node >= 22.
+Banco: Postgres no Neon (nuvem) — não há banco local. Node >= 22 (`.node-version`
+fixa 24). Em produção (`NODE_ENV=production`) o boot recusa subir se a
+`DATABASE_URL` não exigir TLS (`sslmode=require`).
 
 O Pluggy comercial custa **a partir de R$ 2.500/mês**, contra os ~US$ 5-7/mês que o
 briefing orçava para hospedagem. O agregador é o custo dominante do produto, e isso
