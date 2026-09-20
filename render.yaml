@@ -15,7 +15,10 @@ services:
     plan: free
     region: oregon        # alinhe o projeto Neon a esta regiao (AWS us-west-2)
     branch: master
-    buildCommand: npm ci && npm run build
+    # --include=dev: sem isso, o NODE_ENV=production (abaixo) faz o npm pular
+    # as devDependencies (typescript, @types/*), e o `tsc` do build quebra por
+    # falta de tipo. NODE_ENV so precisa valer em runtime (env.ts), nao no build.
+    buildCommand: npm ci --include=dev && npm run build
     # O plano Free nao suporta preDeployCommand, entao a migration roda aqui,
     # antes do servidor subir. Idempotente (tabela schema_migrations) - seguro
     # rodar em todo start, inclusive ao acordar do sono no plano Free.

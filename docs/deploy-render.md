@@ -106,8 +106,10 @@ repositório sempre esteve limpo).
 
 Na aba **Logs**, na ordem:
 
-1. **Build** — `npm ci && npm run build` (compila e copia as migrations para
-   `dist/db/migrations`).
+1. **Build** — `npm ci --include=dev && npm run build` (compila e copia as
+   migrations para `dist/db/migrations`). O `--include=dev` é necessário porque
+   `NODE_ENV=production` faria o `npm ci` pular as devDependencies (TypeScript
+   e os `@types/*`), e o `tsc` quebraria por falta de tipo.
 2. **Deploy / Start** — `node dist/db/migrate.js && node dist/index.js`. O log
    deve listar `migration aplicada` para `001`, `002`, `003` e `004`, terminar
    com `migrations concluidas`, e então `servidor no ar`.
