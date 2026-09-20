@@ -42,7 +42,8 @@ export function criarServidor() {
 
   /**
    * Healthcheck da plataforma (Render) — por isso confere o banco, nao so
-   * responde 200. Tambem serve de alvo para um ping externo de monitoracao.
+   * responde 200. No plano Free, um ping externo periodico contra este
+   * endpoint (ex. UptimeRobot) evita o cold start mantendo o servico acordado.
    */
   app.get('/health', async (_req: Request, res: Response) => {
     try {

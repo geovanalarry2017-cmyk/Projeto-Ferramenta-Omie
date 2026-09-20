@@ -263,8 +263,13 @@ scripts/
 
 Hospedagem no [Render](https://render.com) via **Blueprint**: o
 [`render.yaml`](./render.yaml) na raiz descreve o serviço e o Render o cria já
-configurado. Web Service Node no plano **Starter** (sempre no ar, sem cold
-start), região **Oregon**.
+configurado. Web Service Node no plano **Free**, região **Oregon**.
+
+O plano Free dorme depois de ~15 min sem requisição; a próxima leva ~30s-1min
+para acordar. Não perde dado nenhum — o banco (Neon) é serviço separado e não
+dorme junto. Um monitor externo (ex. UptimeRobot) batendo em `/health` de tempos
+em tempos evita o cold start, se isso incomodar. Trocar para `plan: starter` no
+`render.yaml` quando fizer sentido pagar (~US$ 7/mês) por ficar sempre no ar.
 
 - **Banco:** projeto **Neon de produção**, separado do Neon de desenvolvimento
   que este repositório trata como descartável, na mesma região do serviço. A

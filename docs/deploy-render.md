@@ -81,8 +81,10 @@ repositório sempre esteve limpo).
 
 1. Render → **New** → **Blueprint**.
 2. Conecte a conta do GitHub e escolha o repositório. O Render encontra o
-   `render.yaml` e mostra o serviço `omie-orquestrador` (Web, plano Starter,
-   Oregon).
+   `render.yaml` e mostra o serviço `omie-orquestrador` (Web, plano Free,
+   Oregon). (Se o `render.yaml` pedir `plan: starter`, o Render exige cartão
+   cadastrado antes de provisionar, mesmo com uso baixo — trocar para `free`
+   evita essa tela.)
 3. Em **Environment Variables**, preencha os três marcados como *sync: false*:
    | Variável | Valor |
    |---|---|
@@ -152,8 +154,11 @@ mapear conta nem job para ligar.
   rodam no Pre-Deploy antes de a instância nova receber tráfego.
 - **Rollback**: aba **Deploys** → **Rollback** para a versão anterior. Não há
   down-migration — mudança de schema é sempre para frente.
-- **Plano Starter** (não free): sem cold start. O `/health` ainda serve de alvo
-  para um ping externo se quiser monitorar de fora.
+- **Plano Free**: dorme após ~15 min sem requisição; a próxima leva ~30s-1min
+  para acordar, sem perda de dado (o banco é serviço separado). Um monitor
+  externo (UptimeRobot etc.) batendo em `/health` periodicamente evita isso, se
+  incomodar. Trocar `plan: free` para `plan: starter` no `render.yaml` quando
+  valer a pena pagar (~US$ 7/mês) por ficar sempre no ar.
 - **Perder `CREDENCIAIS_CHAVE`** de produção torna as credenciais dos clientes
   irrecuperáveis — seria preciso recadastrar todos. Trocá-la sem re-cifrar tem o
   mesmo efeito.

@@ -1,5 +1,8 @@
 # Render Blueprint - visualizador de dados Omie.
-# Cria um Web Service Node no plano Starter (sempre no ar, sem cold start).
+# Cria um Web Service Node no plano Free. Dorme apos ~15 min sem requisicao;
+# a proxima leva ~30s-1min para acordar (sem perda de dado - o banco e o Neon,
+# servico separado, nao dorme junto). Trocar para "starter" quando fizer
+# sentido pagar por ficar sempre no ar.
 #
 # Os segredos NAO ficam aqui. DATABASE_URL, CREDENCIAIS_CHAVE e API_TOKEN
 # entram como `sync: false` e sao preenchidos uma unica vez no painel do Render.
@@ -9,7 +12,7 @@ services:
   - type: web
     name: omie-orquestrador
     runtime: node
-    plan: starter
+    plan: free
     region: oregon        # alinhe o projeto Neon a esta regiao (AWS us-west-2)
     branch: master
     buildCommand: npm ci && npm run build
