@@ -16,12 +16,15 @@
 
 ## Confirmação / acesso (art. 18, I e II)
 
-O que o titular pode ver está no `references/mapa-de-dados-pessoais.md`. Gerar
-extração escopada:
+O que o titular pode ver está no `references/mapa-de-dados-pessoais.md`. Hoje o
+produto **não guarda histórico** — DRE, fluxo de caixa e oportunidades são
+buscados na Omie a cada consulta e nunca persistidos. Na prática:
 
-- execuções e itens de conciliação do `cliente_id` no período pedido;
-- filtrar por identificador de contraparte / documento / trecho de descrição
-  quando o controlador fornecer o critério.
+- rodar a mesma consulta que o dashboard faria (`GET /clientes/:cliente/dre`
+  etc.) para o período pedido, e entregar o resultado ao **controlador**;
+- se o pedido for sobre um dado específico de cadastro (nome, documento), o
+  caminho mais direto costuma ser o controlador consultar a própria Omie —
+  ela é a fonte, não o produto.
 
 Entregar ao **controlador** em formato legível (JSON/CSV). O controlador repassa
 ao titular. Comando: «`npm run clientes -- exportar <slug> [--filtro …]`» quando o
@@ -29,29 +32,20 @@ backlog P1 entregar.
 
 ## Correção (art. 18, III)
 
-Dado vem da Omie e do Pluggy — a fonte da verdade é o sistema do cliente. Correção
-estrutural é feita lá e reflete na próxima conciliação. Se houver dado gerado só
-aqui (ex.: `motivo`, `conta_apelido`) que esteja errado, corrigir por operação
-pontual, registrada.
+Dado vem da Omie — é a fonte da verdade. Correção é feita lá e reflete na
+próxima consulta (não há cópia local para corrigir).
 
 ## Eliminação (art. 18, VI)
 
 - **Eliminação de um cliente inteiro** (encerramento / pedido do controlador):
-  `npm run clientes -- excluir <slug>` (backlog P1) — hard delete de `cliente`
-  com cascade para `cliente_conta`, `conciliacao_execucao` e `conciliacao_item`.
+  `npm run clientes -- excluir <slug>` (backlog P1) — `DELETE FROM cliente`.
+  `cliente` não tem mais tabela filha, então não há cascade a verificar.
   `desativar` **não** cumpre eliminação (é soft).
-- **Eliminação de um titular específico** dentro de um cliente: avaliar com o
-  controlador. Apagar linha de `conciliacao_item` quebra a conta de conferência
-  do período; o caminho usual é anonimizar a descrição (remover nome/documento,
-  manter valor/data) em vez de deletar a linha. Registrar a decisão.
+- **Eliminação de um titular específico** (cliente/fornecedor do controlador):
+  não há linha local para apagar — o dado vive só na Omie do controlador.
+  Encaminhar o pedido a ele.
 - Exceção: dado que o controlador precisa reter por obrigação legal (fiscal) não
   é eliminado — informar o titular via controlador.
-
-## Oposição / revisão de decisão automatizada (art. 18, §2º; art. 20)
-
-O score da conciliação tem efeito jurídico baixo (organiza fila de revisão
-humana). Havendo pedido, explicar o critério (valor, data, documento, similaridade
-de texto — ver `matcher.ts`) e revisar manualmente o item.
 
 ## Fechamento
 

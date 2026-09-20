@@ -27,9 +27,8 @@ function esperar(ms: number): Promise<void> {
 /**
  * fetch com timeout e backoff exponencial.
  *
- * As duas APIs deste projeto falham de forma transitoria com alguma frequencia:
- * a Omie limita taxa de requisicao e o Pluggy depende do banco do outro lado.
- * Um job de madrugada que morre no primeiro 502 nao serve.
+ * A Omie falha de forma transitoria com alguma frequencia (limite de taxa,
+ * 5xx esporadico). Uma consulta que morre no primeiro erro nao serve.
  */
 export async function requisitar(
   url: string,

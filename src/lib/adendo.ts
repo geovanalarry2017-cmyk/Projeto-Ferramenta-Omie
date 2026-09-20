@@ -5,9 +5,9 @@
  * adendo de tratamento assinado (art. 39), nao ha instrucao de tratamento
  * documentada, e o cliente nao pode ser ativado nem ter dados processados.
  *
- * Este modulo e a unica fonte dessa decisao — repositorio, middleware HTTP e
- * servico de conciliacao chamam daqui. Puro: nao faz I/O, so decide a partir do
- * que ja foi lido do banco.
+ * Este modulo e a unica fonte dessa decisao — repositorio e middleware HTTP
+ * chamam daqui. Puro: nao faz I/O, so decide a partir do que ja foi lido do
+ * banco.
  */
 
 export interface EstadoAdendoLgpd {

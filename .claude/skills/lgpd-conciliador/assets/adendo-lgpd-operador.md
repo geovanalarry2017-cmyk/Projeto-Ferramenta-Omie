@@ -14,9 +14,8 @@ Este Adendo integra o Contrato de Prestação de Serviços entre:
 ## 1. Objeto
 
 O Operador trata dados pessoais **exclusivamente em nome e sob instrução do
-Controlador**, para prestar o serviço de conciliação bancária automática,
-apuração de DRE e fluxo de caixa e mapa de oportunidades, cruzando dados da conta
-Omie e da conta de Open Finance (Pluggy) do Controlador.
+Controlador**, para prestar o serviço de apuração de DRE, fluxo de caixa e mapa
+de oportunidades a partir dos dados da conta Omie do Controlador.
 
 ## 2. Papéis (LGPD art. 5º, VI e VII)
 
@@ -29,13 +28,14 @@ sobre os dados.
 
 | Categoria de dado | Origem | Titulares |
 |---|---|---|
-| Transações bancárias (valor, data, descrição com nome/documento/chave PIX de contraparte) | Pluggy (conta do Controlador) | contrapartes do Controlador |
 | Lançamentos financeiros, categorias, cadastros de clientes e fornecedores (nome, documento) | Omie (conta do Controlador) | clientes e fornecedores do Controlador |
-| Credenciais de acesso Omie e Pluggy | fornecidas pelo Controlador | representante do Controlador |
-| Metadados de execução (contadores, status) | gerados pelo serviço | — |
+| Credenciais de acesso Omie | fornecidas pelo Controlador | representante do Controlador |
+
+Nada do que é lido é gravado pelo Operador: cada consulta busca de novo na Omie
+e devolve o resultado — não há histórico nem cópia local desses dados.
 
 O Operador **não** trata dados sensíveis (art. 11). Caso o Controlador identifique
-dado sensível trafegando nas descrições, comunicará o Operador para tratamento
+dado sensível trafegando nos cadastros, comunicará o Operador para tratamento
 específico.
 
 ## 4. Finalidade e instruções (art. 39)
@@ -60,8 +60,7 @@ obrigações de proteção equivalentes às deste Adendo:
 
 | Suboperador | Função | Local de tratamento |
 |---|---|---|
-| Pluggy | agregação de Open Finance | «conforme contrato Pluggy» |
-| Omie | ERP de origem/destino | Brasil |
+| Omie | ERP de origem dos dados | Brasil |
 | Neon | banco de dados gerenciado | Estados Unidos (Oregon) |
 | Render | hospedagem da aplicação | Estados Unidos (Oregon) |
 
@@ -94,7 +93,8 @@ O aceite deste Adendo é registrado no sistema no cadastro do Controlador:
 neste arquivo). O cliente não é ativado para tratamento antes desse registro. A
 data da assinatura em si vai no campo "Local e data" ao final.
 
-Versão deste Adendo: **v1 — 2026-09-05**.
+Versão deste Adendo: **v2 — 2026-09-20** (v2: escopo reduzido a DRE/fluxo de
+caixa/oportunidades a partir da Omie, sem conciliação bancária/Open Finance).
 
 ## 10. Direitos do titular (art. 18)
 

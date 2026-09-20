@@ -2,12 +2,10 @@ import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { encerrarPool } from './db/pool.js';
 import { criarServidor } from './http/server.js';
-import { agendarConciliacao } from './jobs/scheduler.js';
 
 const app = criarServidor();
 const servidor = app.listen(env.PORT, () => {
   logger.info({ porta: env.PORT }, 'servidor no ar');
-  agendarConciliacao();
 });
 
 /** Encerramento limpo: o Render manda SIGTERM antes de trocar a instancia. */

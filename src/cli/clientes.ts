@@ -1,29 +1,23 @@
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
 import {
-  buscarComCredenciais,
   buscarPorSlug,
   criarCliente,
   definirAtivo,
   listarClientes,
-  listarContas,
-  mapearConta,
   registrarAceiteAdendo,
 } from '../clientes/repository.js';
 import { encerrarPool } from '../db/pool.js';
-import { listarContasCorrentes } from '../omie/financas.js';
-import { listarContas as listarContasPluggy, obterItem } from '../pluggy/client.js';
 
 /**
  * Gerencia os clientes do produto.
  *
- * As credenciais de Omie e Pluggy sao por cliente e vivem cifradas no banco,
- * entao precisam de um caminho para entrar la. Este CLI e esse caminho.
+ * A credencial da Omie e por cliente e vive cifrada no banco, entao precisa de
+ * um caminho para entrar la. Este CLI e esse caminho.
  *
  *   npm run clientes -- listar
  *   npm run clientes -- criar --slug acme --nome "Acme Ltda"
- *   npm run clientes -- contas --cliente acme --item <itemIdDoPluggy>
- *   npm run clientes -- mapear --cliente acme --conta <accountId> --omie <nCodCC> --apelido "Itau PJ"
+ *   npm run clientes -- aceite --cliente acme --versao v1
  *   npm run clientes -- desativar --cliente acme
  */
 
@@ -73,16 +67,13 @@ async function comandoListar(): Promise<void> {
 
   console.log('');
   console.table(
-    await Promise.all(
-      clientes.map(async (c) => ({
-        Slug: c.slug,
-        Nome: c.nome,
-        Ativo: c.ativo ? 'sim' : 'nao',
-        Adendo: c.adendoLgpdAceitoEm ? c.adendoLgpdVersao : 'pendente',
-        Contas: (await listarContas(c.id, false)).length,
-        Desde: c.criadoEm.toISOString().slice(0, 10),
-      })),
-    ),
+    clientes.map((c) => ({
+      Slug: c.slug,
+      Nome: c.nome,
+      Ativo: c.ativo ? 'sim' : 'nao',
+      Adendo: c.adendoLgpdAceitoEm ? c.adendoLgpdVersao : 'pendente',
+      Desde: c.criadoEm.toISOString().slice(0, 10),
+    })),
   );
   console.log('');
 }
@@ -106,51 +97,34 @@ async function comandoCriar(slug?: string, nome?: string): Promise<void> {
   const doAmbiente = {
     appKey: process.env.NOVO_OMIE_APP_KEY,
     appSecret: process.env.NOVO_OMIE_APP_SECRET,
-    clientId: process.env.NOVO_PLUGGY_CLIENT_ID,
-    clientSecret: process.env.NOVO_PLUGGY_CLIENT_SECRET,
   };
   const naoInterativo = Object.values(doAmbiente).every(Boolean);
 
   let appKey: string;
   let appSecret: string;
-  let clientId: string;
-  let clientSecret: string;
 
   if (naoInterativo) {
     console.log(`\nCredenciais de "${nome}" lidas do ambiente.`);
     appKey = doAmbiente.appKey!;
     appSecret = doAmbiente.appSecret!;
-    clientId = doAmbiente.clientId!;
-    clientSecret = doAmbiente.clientSecret!;
   } else {
     console.log(`\nCredenciais de "${nome}". Elas serao cifradas antes de ir para o banco.\n`);
     console.log('--- Omie (app.omie.com.br > Configuracoes > APIs) ---');
     appKey = await perguntar('OMIE App Key');
     appSecret = await perguntar('OMIE App Secret', true);
-
-    console.log('\n--- Pluggy (dashboard.pluggy.ai > Applications) ---');
-    clientId = await perguntar('PLUGGY Client ID');
-    clientSecret = await perguntar('PLUGGY Client Secret', true);
   }
 
-  if (!appKey || !appSecret || !clientId || !clientSecret) {
-    throw new Error('Todas as quatro credenciais sao obrigatorias.');
+  if (!appKey || !appSecret) {
+    throw new Error('App Key e App Secret da Omie sao obrigatorios.');
   }
 
-  const cliente = await criarCliente({
-    slug,
-    nome,
-    omie: { appKey, appSecret },
-    pluggy: { clientId, clientSecret },
-  });
+  const cliente = await criarCliente({ slug, nome, omie: { appKey, appSecret } });
 
   console.log(`\nCliente "${cliente.slug}" criado (id ${cliente.id}) — INATIVO.`);
   console.log(
     'Nao processa dados enquanto o adendo LGPD de operador nao for registrado:',
   );
-  console.log(`  npm run clientes -- aceite --cliente ${cliente.slug} --versao <versao assinada>`);
-  console.log('Proximo passo — descobrir as contas:');
-  console.log(`  npm run clientes -- contas --cliente ${cliente.slug} --item <itemIdDoPluggy>\n`);
+  console.log(`  npm run clientes -- aceite --cliente ${cliente.slug} --versao <versao assinada>\n`);
 }
 
 /** Registra o aceite do adendo LGPD e ativa o cliente para tratamento. */
@@ -173,81 +147,6 @@ async function comandoAceite(slug?: string, versao?: string): Promise<void> {
   );
 }
 
-/** Mostra os dois lados que precisam ser ligados: contas da Omie e do Pluggy. */
-async function comandoContas(slug?: string, itemId?: string): Promise<void> {
-  const resumo = await exigirCliente(slug);
-  const cliente = (await buscarComCredenciais(resumo.id))!;
-
-  console.log(`\n=== Contas correntes na Omie de "${cliente.nome}" ===\n`);
-  const contasOmie = await listarContasCorrentes(cliente.omie);
-  console.table(
-    contasOmie.map((c) => ({
-      'nCodCC (use em --omie)': c.nCodCC,
-      Descricao: c.descricao,
-      Banco: c.codigo_banco,
-      Conta: c.conta_corrente,
-    })),
-  );
-
-  if (!itemId) {
-    console.log(
-      'Para ver as contas do Pluggy, rode de novo com --item <itemId>.\n' +
-        'O itemId vem do dashboard do Pluggy (Applications > Items) ou do Pluggy Connect.\n',
-    );
-    return;
-  }
-
-  const item = await obterItem(cliente.pluggy, itemId);
-  console.log(
-    `\n=== Contas no Pluggy — ${item.connector?.name ?? 'instituicao'} (${item.status}) ===\n`,
-  );
-
-  const contasPluggy = await listarContasPluggy(cliente.pluggy, itemId);
-  console.table(
-    contasPluggy.map((c) => ({
-      'accountId (use em --conta)': c.id,
-      Tipo: c.type,
-      Nome: c.name,
-      Numero: c.number,
-    })),
-  );
-
-  console.log('Ligue as duas pontas com:');
-  console.log(
-    `  npm run clientes -- mapear --cliente ${cliente.slug} --conta <accountId> --omie <nCodCC> --apelido "Nome"\n`,
-  );
-}
-
-async function comandoMapear(
-  slug?: string,
-  accountId?: string,
-  nCodCC?: string,
-  apelido?: string,
-): Promise<void> {
-  const cliente = await exigirCliente(slug);
-
-  if (!accountId || !nCodCC) {
-    throw new Error('Informe --conta <accountId do Pluggy> e --omie <nCodCC da Omie>.');
-  }
-
-  const codigo = Number(nCodCC);
-  if (!Number.isInteger(codigo) || codigo <= 0) {
-    throw new Error(`--omie deve ser o nCodCC numerico. Recebido: "${nCodCC}"`);
-  }
-
-  const conta = await mapearConta(cliente.id, {
-    apelido: apelido ?? 'Conta principal',
-    pluggyAccountId: accountId,
-    omieCodigoContaCorrente: codigo,
-  });
-
-  console.log(
-    `\nMapeado para "${cliente.slug}": ${conta.apelido} — Pluggy ${conta.pluggyAccountId} <-> Omie ${conta.omieCodigoContaCorrente}\n`,
-  );
-  console.log('Ja da para conciliar:');
-  console.log(`  npm run conciliar -- --cliente ${cliente.slug} --de 2026-08-01 --ate 2026-08-30\n`);
-}
-
 async function principal(): Promise<void> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -255,10 +154,6 @@ async function principal(): Promise<void> {
       slug: { type: 'string' },
       nome: { type: 'string' },
       cliente: { type: 'string' },
-      item: { type: 'string' },
-      conta: { type: 'string' },
-      omie: { type: 'string' },
-      apelido: { type: 'string' },
       versao: { type: 'string' },
     },
   });
@@ -272,14 +167,10 @@ async function principal(): Promise<void> {
       return comandoCriar(values.slug, values.nome);
     case 'aceite':
       return comandoAceite(values.cliente, values.versao);
-    case 'contas':
-      return comandoContas(values.cliente, values.item);
-    case 'mapear':
-      return comandoMapear(values.cliente, values.conta, values.omie, values.apelido);
     case 'desativar': {
       const cliente = await exigirCliente(values.cliente);
       await definirAtivo(cliente.id, false);
-      console.log(`\nCliente "${cliente.slug}" desativado — sai do cron, historico preservado.\n`);
+      console.log(`\nCliente "${cliente.slug}" desativado — API para de servir os dados dele.\n`);
       return;
     }
     case 'ativar': {
@@ -292,12 +183,9 @@ async function principal(): Promise<void> {
       console.log(`
 Comandos:
   listar                                        lista os clientes
-  criar --slug <s> --nome "<n>"                 cria um cliente (INATIVO) e pede as credenciais
+  criar --slug <s> --nome "<n>"                 cria um cliente (INATIVO) e pede a credencial Omie
   aceite --cliente <s> --versao <v>             registra o aceite do adendo LGPD e ativa o cliente
-  contas --cliente <s> [--item <itemId>]        mostra contas da Omie e do Pluggy
-  mapear --cliente <s> --conta <accountId>
-         --omie <nCodCC> [--apelido "<a>"]      liga uma conta do banco a uma da Omie
-  ativar | desativar --cliente <s>              liga/desliga o cliente no cron (ativar exige adendo)
+  ativar | desativar --cliente <s>              liga/desliga o cliente na API (ativar exige adendo)
 `);
   }
 }

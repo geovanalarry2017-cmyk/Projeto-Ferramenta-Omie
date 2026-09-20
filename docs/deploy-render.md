@@ -1,4 +1,4 @@
-# Deploy da Fase 1 no Render
+# Deploy do visualizador no Render
 
 Passo a passo do primeiro deploy. O `render.yaml` na raiz é um **Blueprint**: o
 Render lê ele e cria o serviço já configurado. Este documento cobre o que o
@@ -9,7 +9,9 @@ Contexto que não muda com o deploy:
 - **Ainda não há cliente real.** O sistema sobe com o banco vazio. Nenhum dado
   pessoal é tratado até alguém rodar `clientes -- criar` + `clientes -- aceite`
   (ver passo 7). O código recusa ativar cliente sem o aceite do adendo LGPD
-  registrado.
+  registrado. Mesmo depois disso, o Postgres não guarda dado de transação
+  nenhum — DRE, fluxo de caixa e oportunidades são buscados na Omie a cada
+  consulta.
 - **Os segredos de desenvolvimento não vão para produção.** `CREDENCIAIS_CHAVE`
   e `API_TOKEN` de produção são novos, gerados no passo 2.
 
@@ -46,11 +48,11 @@ idempotentes (tabela `schema_migrations`).
 Dois valores novos, **diferentes** dos de desenvolvimento:
 
 ```sh
-# CREDENCIAIS_CHAVE — 32 bytes em hex. Cifra as credenciais Omie/Pluggy dos
-# clientes. Se for perdida, o que estiver cifrado no banco fica irrecuperável.
+# CREDENCIAIS_CHAVE — 32 bytes em hex. Cifra a App Key/Secret da Omie de cada
+# cliente. Se for perdida, o que estiver cifrado no banco fica irrecuperável.
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# API_TOKEN — protege o disparo de conciliação via HTTP e o dashboard.
+# API_TOKEN — protege as rotas de dados e o dashboard.
 node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
 ```
 
@@ -88,8 +90,7 @@ repositório sempre esteve limpo).
    | `CREDENCIAIS_CHAVE` | hex do passo 2 |
    | `API_TOKEN` | token do passo 2 |
 
-   As demais (`NODE_ENV`, `OMIE_BASE_URL`, tolerâncias, `CRON_ATIVO=false`…) já
-   vêm do `render.yaml`.
+   As demais (`NODE_ENV`, `OMIE_BASE_URL`, `LOG_LEVEL`) já vêm do `render.yaml`.
 4. **Apply** / **Create**. O primeiro deploy começa.
 
 ---
@@ -101,10 +102,9 @@ Na aba **Logs**, na ordem:
 1. **Build** — `npm ci && npm run build` (compila e copia as migrations para
    `dist/db/migrations`).
 2. **Pre-Deploy** — `node dist/db/migrate.js`. Deve listar
-   `migration aplicada` para `001`, `002` e `003` e terminar com
+   `migration aplicada` para `001`, `002`, `003` e `004` e terminar com
    `migrations concluidas`.
-3. **Deploy / Start** — `node dist/index.js` → `servidor no ar`. O log de cron
-   diz `cron desativado (CRON_ATIVO=false)` — é o esperado.
+3. **Deploy / Start** — `node dist/index.js` → `servidor no ar`.
 4. **Health check** — o Render chama `/health` até responder `200`. Fica
    **Live** quando responde `{ "status": "ok", "banco": "ok" }`.
 
@@ -129,22 +129,20 @@ ela reescreve o DOM e quebra a página.
 
 ---
 
-## Passo 7 — Primeiro cliente e o cron
+## Passo 7 — Primeiro cliente
 
 Só quando houver um cliente real, com o adendo LGPD assinado:
 
 ```sh
 # Localmente, apontando para o banco de PRODUÇÃO (DATABASE_URL de produção no
 # shell), ou por um shell do Render:
-npm run clientes -- criar --slug <slug> --nome "<Razão Social>"
+npm run clientes -- criar  --slug <slug> --nome "<Razão Social>"
 npm run clientes -- aceite --cliente <slug> --versao <versão do adendo assinado>
-npm run clientes -- contas  --cliente <slug> --item <itemId do Pluggy>
-npm run clientes -- mapear  --cliente <slug> --conta <accountId> --omie <nCodCC>
 ```
 
-Rode uma conciliação manual de um período curto e confira os números (a conta de
-caixa fecha com o DRE — ver `CLAUDE.md`). **Só depois disso** vale ligar o cron:
-em **Environment** no Render, `CRON_ATIVO=true`, e salvar (dispara um redeploy).
+Depois disso o cliente aparece em `GET /clientes` e o dashboard já busca DRE,
+fluxo de caixa e oportunidades direto na conta Omie dele — não há passo de
+mapear conta nem job para ligar.
 
 ---
 

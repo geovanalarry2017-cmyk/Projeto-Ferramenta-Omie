@@ -3,21 +3,27 @@ name: lgpd-conciliador
 description: >-
   Conformidade LGPD do orquestrador Omie, que atua como OPERADOR de dados
   pessoais em nome de cada cliente (o controlador). Use ao revisar código que
-  toca dado pessoal (descrição de transação, CPF/CNPJ, chave PIX, credencial de
-  cliente), ao adicionar integração externa ou coluna de banco, ao preparar
-  deploy com dados reais, ou quando pedirem política de privacidade, adendo LGPD
-  de operador, ROPA, RIPD ou runbook de requisição de titular / de incidente.
+  toca dado pessoal (nome/CPF/CNPJ de cliente ou fornecedor vindo da Omie,
+  credencial de cliente), ao adicionar integração externa ou coluna de banco,
+  ao preparar deploy com dados reais, ou quando pedirem política de privacidade,
+  adendo LGPD de operador, ROPA, RIPD ou runbook de requisição de titular / de
+  incidente.
 ---
 
-# LGPD no conciliador Omie
+# LGPD no visualizador de dados Omie
+
+> O produto já foi um conciliador bancário via Open Finance (Pluggy); essa
+> parte foi removida. O nome da skill ficou (é o path do diretório), mas o
+> conteúdo abaixo já reflete só o que existe hoje: DRE, fluxo de caixa e mapa
+> de oportunidades, todos a partir da conta Omie do cliente.
 
 ## Postura em uma frase
 
 Este produto é **operador** (LGPD art. 5º, VII). Cada cliente contratante é o
-**controlador**: ele define finalidade e meios, contrata Pluggy e Omie, e
-responde perante os titulares. O produto trata dado pessoal **só sob instrução
-documentada do controlador** (art. 39) e o mínimo para conciliar, apurar DRE e
-mapear oportunidades.
+**controlador**: ele define finalidade e meios, contrata a Omie, e responde
+perante os titulares. O produto trata dado pessoal **só sob instrução
+documentada do controlador** (art. 39) e o mínimo para apurar DRE, fluxo de
+caixa e mapear oportunidades.
 
 Consequências que mudam o que se constrói:
 
@@ -38,20 +44,22 @@ Consequências que mudam o que se constrói:
 
 ## Onde o dado pessoal realmente está
 
-O maior volume de PII **não é do cliente** — é de **terceiros**: pagadores e
-recebedores nas transações bancárias e nos lançamentos da Omie. Inventário vivo
-em [`references/mapa-de-dados-pessoais.md`](references/mapa-de-dados-pessoais.md).
+O maior volume de PII **não é do cliente** — são os **clientes e fornecedores
+dele**, cadastrados na Omie e expostos nas telas de DRE/oportunidades.
+Inventário vivo em
+[`references/mapa-de-dados-pessoais.md`](references/mapa-de-dados-pessoais.md).
 Pontos quentes:
 
 | Local | Dado |
 |---|---|
-| `conciliacao_item.banco_descricao` / `omie_descricao` | nome de contraparte, **chave PIX (pode ser CPF, telefone ou e-mail)**, nº de documento |
-| `lib/documento.ts` | CPF/CNPJ normalizados para o match |
-| `cliente.*_cif` | credenciais Omie/Pluggy do cliente — cifradas AES-256-GCM |
-| DRE / Oportunidades | nomes de clientes e fornecedores do cliente, vindos da Omie |
+| Respostas de DRE / DRE mensal / fluxo de caixa / oportunidades | nomes e documentos (CPF/CNPJ) de clientes e fornecedores do cliente, vindos da Omie — buscado a cada consulta, **nunca gravado no Postgres** |
+| `cliente.omie_app_key_cif` / `omie_app_secret_cif` | credencial de acesso à Omie do cliente — cifrada AES-256-GCM |
 
-Suboperadores (recebem dado pessoal): **Pluggy, Omie, Neon, Render**. Lista com o
-que cada um recebe e onde fica em [`references/suboperadores.md`](references/suboperadores.md).
+`cliente` é hoje a **única tabela do produto com dado pessoal** — não há mais
+nenhuma tabela de transação ou histórico local.
+
+Suboperadores (recebem dado pessoal): **Omie, Neon, Render**. Lista com o que
+cada um recebe e onde fica em [`references/suboperadores.md`](references/suboperadores.md).
 
 ## Os três modos
 
@@ -64,18 +72,16 @@ finding:
 - dado pessoal chegando a `logger.*` num campo cujo nome escapa da redação de
   `src/lib/redacao.ts` (sufixos de texto livre + padrões CPF/CNPJ/e-mail/
   telefone/UUID), ou nome de pessoa montado na string da mensagem;
-- query em `conciliacao_execucao` / `conciliacao_item` / `cliente_conta` sem
-  amarrar `cliente_id` (em `conciliacao_item` o vínculo é via `execucao_id`);
+- rota nova de dado (`/dre`, `/dre-mensal`, `/fluxo-caixa`, `/oportunidades`…)
+  sem passar por `resolverCliente` (middleware);
 - gravação em coluna de credencial sem passar por `lib/cripto.ts`, ou log do
   valor decifrado;
 - `fetch` / SDK novo para host fora de `references/suboperadores.md`;
 - migration que adiciona coluna capaz de conter PII sem entrada no mapa de dados;
-- prazo de retenção no mapa sem caminho de expurgo que o cumpra;
-- campo lido de Pluggy/Omie e persistido sem uso em conciliação ou DRE
+- campo lido da Omie e devolvido ao dashboard sem uso em DRE/oportunidades
   (minimização — art. 6º, III);
-- redação / minimização escrita dentro do núcleo puro (`matcher.ts`,
-  `normalize.ts`, `oportunidades/analisar.ts`, `lib/`) — tem de ficar no limite
-  de I/O.
+- redação / minimização escrita dentro do núcleo puro (`dre/montar.ts`,
+  `oportunidades/analisar.ts`, `lib/`) — tem de ficar no limite de I/O.
 
 ### 2. Scaffold (ao gerar um documento)
 

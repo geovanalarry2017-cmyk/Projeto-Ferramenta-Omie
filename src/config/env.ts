@@ -4,15 +4,8 @@ import { z } from 'zod';
 /**
  * Toda configuracao passa por aqui e e validada no boot.
  * Se faltar credencial ou vier lixo no .env, o processo morre na hora com
- * mensagem clara — melhor do que descobrir as 3h da manha no meio do cron.
+ * mensagem clara — melhor do que descobrir depois de subir em producao.
  */
-
-/** "true"/"false" no .env viram boolean de verdade. */
-const booleano = (padrao: boolean) =>
-  z
-    .string()
-    .default(padrao ? 'true' : 'false')
-    .transform((v) => v.trim().toLowerCase() === 'true');
 
 /**
  * Variavel obrigatoria com mensagem propria.
@@ -31,9 +24,9 @@ export const envSchema = z
   .object({
   NODE_ENV: z.string().optional(),
 
-  // As credenciais de Omie e Pluggy NAO ficam aqui: sao por cliente e vivem
-  // cifradas no banco (tabela `cliente`). O ambiente guarda so o que e do
-  // servidor, valido para todos os clientes.
+  // A credencial da Omie NAO fica aqui: e por cliente e vive cifrada no banco
+  // (tabela `cliente`). O ambiente guarda so o que e do servidor, valido para
+  // todos os clientes.
   OMIE_BASE_URL: z.string().min(1).default('https://app.omie.com.br/api/v1'),
 
   DATABASE_URL: obrigatoria('String de conexao do Postgres (Neon/Supabase).'),
@@ -43,16 +36,6 @@ export const envSchema = z
       'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))". ' +
       'Perder esta chave torna as credenciais guardadas irrecuperaveis.',
   ),
-
-  CONCILIACAO_TOLERANCIA_DIAS: z.coerce.number().int().min(0).max(15).default(2),
-  CONCILIACAO_TOLERANCIA_VALOR_CENTAVOS: z.coerce.number().int().min(0).default(500),
-  CONCILIACAO_SCORE_MINIMO: z.coerce.number().min(0).max(1).default(0.6),
-  CONCILIACAO_JANELA_DIAS: z.coerce.number().int().min(1).max(90).default(3),
-  OMIE_EXTRATO_SINAL_POR_NATUREZA: booleano(true),
-
-  CRON_ATIVO: booleano(false),
-  CRON_EXPRESSAO: z.string().default('0 3 * * *'),
-  CRON_TIMEZONE: z.string().default('America/Sao_Paulo'),
 
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

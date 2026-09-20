@@ -8,10 +8,10 @@ import {
 /**
  * Cifragem das credenciais de cliente guardadas no banco.
  *
- * Guardar App Secret da Omie e Client Secret do Pluggy em texto puro
- * significaria que qualquer dump do banco — backup, log de query, acesso de
- * leitura ao Neon — entrega acesso total ao ERP e ao Open Finance de TODOS os
- * clientes de uma vez. A chave mora fora do banco, no ambiente.
+ * Guardar App Secret da Omie em texto puro significaria que qualquer dump do
+ * banco — backup, log de query, acesso de leitura ao Neon — entrega acesso
+ * total ao ERP de TODOS os clientes de uma vez. A chave mora fora do banco, no
+ * ambiente.
  *
  * AES-256-GCM: alem de cifrar, autentica. Se o texto cifrado for adulterado,
  * a decifragem falha em vez de devolver lixo silenciosamente.

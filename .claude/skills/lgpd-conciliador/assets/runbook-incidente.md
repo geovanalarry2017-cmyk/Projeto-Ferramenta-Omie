@@ -13,7 +13,7 @@ tratado pelo produto. Exemplos concretos aqui:
   transcript de sessão em canal aberto — ver `CLAUDE.md`);
 - resposta de API ou log entregando dado de um cliente a outro;
 - acesso ao dashboard com `API_TOKEN` de terceiro;
-- Neon / Render / Pluggy / Omie comunicando incidente que afete os dados.
+- Neon / Render / Omie comunicando incidente que afete os dados.
 
 ## Passos
 
@@ -61,5 +61,4 @@ que ele precisar (logs escopados, linha do tempo, parecer técnico).
 ## Contatos
 
 - Encarregado do operador: «nome», «canal».
-- Contatos de incidente dos suboperadores: Neon «…», Render «…», Pluggy «…»,
-  Omie «…».
+- Contatos de incidente dos suboperadores: Neon «…», Render «…», Omie «…».

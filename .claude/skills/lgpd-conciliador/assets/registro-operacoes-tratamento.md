@@ -6,7 +6,7 @@
 > retenção). Uma cópia consolidada + um anexo por cliente controlador quando os
 > prazos de retenção variarem.
 
-Responsável pelo registro: «encarregado / nome» — Última revisão: 2026-09-05.
+Responsável pelo registro: «encarregado / nome» — Última revisão: 2026-09-20.
 
 ## Identificação
 
@@ -16,41 +16,27 @@ Responsável pelo registro: «encarregado / nome» — Última revisão: 2026-09
 
 ## Operações
 
-### OP-1 — Conciliação bancária
-
-| Campo | Conteúdo |
-|---|---|
-| Finalidade | conferir transações do extrato contra lançamentos da Omie |
-| Natureza | coleta (Pluggy/Omie), cruzamento, armazenamento, disponibilização em relatório |
-| Categorias de titular | contrapartes das transações; representante do cliente (credenciais) |
-| Categorias de dado | valor, data, descrição (nome/documento/chave PIX de contraparte), identificadores de transação e lançamento |
-| Base legal (do controlador) | art. 7º, II + V + IX |
-| Compartilhamento | Pluggy, Omie, Neon, Render (suboperadores) |
-| Transferência internacional | sim — EUA (Neon, Render); cláusulas contratuais |
-| Retenção | «definir por controlador»; registro contábil retido conforme prazo fiscal, dado operacional expurgado ao fim da necessidade |
-| Segurança | cifragem de credencial, isolamento por `cliente_id`, TLS, redação de log |
-
-### OP-2 — Apuração de DRE, fluxo de caixa e mapa de oportunidades
+### OP-1 — Apuração de DRE, fluxo de caixa e mapa de oportunidades
 
 | Campo | Conteúdo |
 |---|---|
 | Finalidade | demonstrativos financeiros e identificação de oportunidades |
-| Natureza | leitura de lançamentos/categorias/cadastros da Omie, agregação, disponibilização em dashboard |
+| Natureza | leitura de lançamentos/categorias/cadastros da Omie, agregação, disponibilização em dashboard — buscado a cada consulta, **nunca persistido** |
 | Categorias de titular | clientes e fornecedores do cliente |
-| Categorias de dado | valores, categorias, nomes e documentos |
-| Base legal | art. 7º, II + V + IX |
+| Categorias de dado | valores, categorias, nomes e documentos (CPF/CNPJ) |
+| Base legal | art. 7º, II + V |
 | Compartilhamento | Omie, Neon, Render |
 | Transferência internacional | sim — EUA (Neon, Render) |
-| Retenção | «definir por controlador» |
-| Observação | tratamento automatizado (classificação/score) — ver RIPD |
+| Retenção | não se aplica — o produto não guarda o resultado; a Omie do controlador é a fonte e a guarda |
+| Observação | o mapa de oportunidades sinaliza padrões (queda de margem, despesa fora da curva etc.) por regra fixa, sem decisão automatizada que produza efeito jurídico sobre pessoa física — ver RIPD |
 
-### OP-3 — Guarda de credenciais de acesso
+### OP-2 — Guarda de credencial de acesso
 
 | Campo | Conteúdo |
 |---|---|
-| Finalidade | autenticar nas APIs Omie e Pluggy do cliente |
+| Finalidade | autenticar na API da Omie do cliente |
 | Categorias de titular | representante do cliente |
-| Categorias de dado | app key/secret Omie, client id/secret Pluggy |
+| Categorias de dado | app key/secret Omie |
 | Base legal | art. 7º, V |
 | Segurança | AES-256-GCM em repouso, chave em `CREDENCIAIS_CHAVE` fora do banco |
 | Retenção | eliminar no encerramento do contrato |

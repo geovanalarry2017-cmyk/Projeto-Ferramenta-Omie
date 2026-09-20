@@ -43,7 +43,7 @@ const normalizarChave = (chave: string): string => chave.toLowerCase().replace(/
 const SUFIXOS_TEXTO_LIVRE = ['descricao', 'description', 'historico', 'observacao', 'complemento'];
 
 /** Identificador tecnico conhecido: nao e PII, deixa passar mesmo com cara de UUID. */
-const CAMPOS_IDENTIFICADOR = new Set(['accountid', 'itemid', 'pluggyaccountid']);
+const CAMPOS_IDENTIFICADOR = new Set(['accountid']);
 
 const PROFUNDIDADE_MAX = 8;
 
@@ -55,7 +55,7 @@ function ehTextoLivre(chave: string): boolean {
 /**
  * Percorre valor de qualquer forma (objeto, array, primitivo) redigindo PII.
  * Devolve uma copia — nao muta a entrada. Corta ciclo e profundidade excessiva
- * para nao travar com um payload cru grande da Pluggy/Omie.
+ * para nao travar com um payload cru grande da Omie.
  */
 export function redigirValor(valor: unknown): unknown {
   return percorrer(valor, 0, new WeakSet<object>());

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { pool } from '../db/pool.js';
-import { rotasConciliacao } from './routes/conciliacao.js';
+import { rotasClientes } from './routes/clientes.js';
 import { rotasDashboard } from './routes/dashboard.js';
 import { rotasOportunidades } from './routes/oportunidades.js';
 
@@ -41,9 +41,8 @@ export function criarServidor() {
   app.use(express.json({ limit: '1mb' }));
 
   /**
-   * O free tier do Render dorme apos 15 min de inatividade. Este endpoint e o
-   * alvo do ping externo que mantem o servico acordado, e tambem o healthcheck
-   * da plataforma — por isso confere o banco, nao so responde 200.
+   * Healthcheck da plataforma (Render) — por isso confere o banco, nao so
+   * responde 200. Tambem serve de alvo para um ping externo de monitoracao.
    */
   app.get('/health', async (_req: Request, res: Response) => {
     try {
@@ -54,7 +53,7 @@ export function criarServidor() {
     }
   });
 
-  app.use(rotasConciliacao);
+  app.use(rotasClientes);
   app.use(rotasDashboard);
   app.use(rotasOportunidades);
 

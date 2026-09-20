@@ -7,14 +7,13 @@
 > Já existe um rascunho servido em `public/politica-de-privacidade.html`
 > (ligado no rodapé do dashboard) — manter os dois em sincronia ao preencher.
 
-Última atualização: 2026-09-05 — versão v1.
+Última atualização: 2026-09-20 — versão v2.
 
 ## 1. Quem somos e qual é o nosso papel
 
-«Nome do produto» é um serviço de conciliação bancária automática e apuração
-financeira (DRE, fluxo de caixa, mapa de oportunidades) para empresas que usam o
-ERP Omie. Cruzamos os dados da conta Omie e da conta de Open Finance de cada
-empresa cliente.
+«Nome do produto» é um serviço de apuração financeira (DRE, fluxo de caixa, mapa
+de oportunidades) para empresas que usam o ERP Omie, a partir dos dados já
+cadastrados na conta Omie de cada empresa cliente.
 
 Perante a LGPD (Lei 13.709/2018), atuamos como **operador**: tratamos dados
 pessoais **em nome de cada empresa cliente**, que é a **controladora** e define
@@ -23,24 +22,20 @@ compartilhamos entre clientes e não os comercializamos.
 
 ## 2. Dados que tratamos
 
-Por conta e ordem de cada cliente:
+Por conta e ordem de cada cliente, e sem guardar cópia — cada consulta busca de
+novo na Omie:
 
-- **Transações bancárias** obtidas via Open Finance: valor, data, descrição —
-  que pode conter nome, documento (CPF/CNPJ) ou chave PIX de quem pagou ou
-  recebeu.
 - **Lançamentos e cadastros da Omie**: valores, categorias, nomes e documentos
-  de clientes e fornecedores do cliente.
-- **Credenciais de acesso** Omie e Pluggy do cliente, guardadas cifradas.
-- **Metadados de operação**: contadores e status de cada conciliação.
+  (CPF/CNPJ) de clientes e fornecedores do cliente.
+- **Credenciais de acesso** Omie do cliente, guardadas cifradas.
 
 Não tratamos dados sensíveis (origem racial, saúde, biometria etc.).
 
 ## 3. Para que tratamos e com que base
 
-Executar a conciliação e a apuração financeira contratadas. A base legal perante
-os titulares é definida pela empresa controladora — tipicamente cumprimento de
-obrigação legal (escrituração contábil e fiscal), execução de contrato e legítimo
-interesse na conferência dos lançamentos.
+Executar a apuração financeira contratada. A base legal perante os titulares é
+definida pela empresa controladora — tipicamente cumprimento de obrigação legal
+(escrituração contábil e fiscal) e execução de contrato.
 
 ## 4. Com quem compartilhamos
 
@@ -49,7 +44,6 @@ contratual de proteção de dados:
 
 | Suboperador | Função | Local |
 |---|---|---|
-| Pluggy | agregação de Open Finance | «…» |
 | Omie | ERP de origem dos dados | Brasil |
 | Neon | banco de dados | Estados Unidos |
 | Render | hospedagem | Estados Unidos |

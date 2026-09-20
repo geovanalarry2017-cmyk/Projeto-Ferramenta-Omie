@@ -1,35 +1,46 @@
 # CLAUDE.md
 
-Backend orquestrador entre a Omie e serviços externos. **Produto multi-cliente**,
-não ferramenta interna de uma empresa só.
+Backend orquestrador entre a Omie e o cliente. **Produto multi-cliente**, não
+ferramenta interna de uma empresa só.
 
-O [`README.md`](./README.md) é a documentação real: o que o conciliador faz, como
+O [`README.md`](./README.md) é a documentação real: o que o produto faz, como
 cadastrar cliente, todas as rotas, as sete visualizações do dashboard, as decisões
 de projeto e o mapa de `src/`. **Leia-o antes de mexer em qualquer coisa** — este
 arquivo só cobre o que ele não cobre. O briefing original está em
 [`projeto-omie-integracoes.md`](./projeto-omie-integracoes.md).
 
-## Estado atual (05/09/2026)
+## Estado atual (20/09/2026)
 
-Fase 1 entregue e verde: **132 testes em 11 arquivos, `npm run typecheck` limpo.**
+**Pivot nesta sessão: o produto deixou de fazer conciliação bancária via Open
+Finance (Pluggy) e virou um visualizador de dados Omie** — DRE, fluxo de caixa e
+mapa de oportunidades, multi-cliente, cada cliente com sua própria App Key/Secret
+da Omie cifrada no banco. Motor de match, wrapper do Pluggy, CLI `conciliar`, job
+cron e as tabelas `conciliacao_execucao`/`conciliacao_item`/`cliente_conta` foram
+removidos (migration `004_remover_pluggy_e_conciliacao.sql`, **ainda não aplicada
+em nenhum banco**). O dashboard não perdeu tela nenhuma — já era 100% Omie antes
+do corte.
 
-Pronto: conciliador bancário, DRE (caixa e competência), DRE mês a mês, fluxo de
-caixa, mapa de oportunidades, dashboard com sete gráficos e tema claro/escuro,
-prévia estática (`npm run previa`), redação de PII no log, e a trava técnica do
-adendo LGPD (cliente nasce inativo, não é processado sem o aceite registrado).
+**96 testes em 9 arquivos, `npm run typecheck` limpo.**
+
+Pronto: DRE (caixa e competência), DRE mês a mês, fluxo de caixa, mapa de
+oportunidades, dashboard com sete gráficos e tema claro/escuro, prévia estática
+(`npm run previa`), redação de PII no log, e a trava técnica do adendo LGPD
+(cliente nasce inativo, não é processado sem o aceite registrado).
 
 Layout e proposta foram **aprovados na reunião de 31/08/2026, sem pedidos de
-mudança**. O Render foi retomado: `render.yaml` (Blueprint), `.node-version` e
-`docs/deploy-render.md` estão commitados. Faltam só os **passos manuais** — criar
-o Neon de produção, o repositório privado no GitHub e o serviço no painel do
-Render. Runbook em [`docs/deploy-render.md`](./docs/deploy-render.md).
+mudança** (isso era sobre a UI, que não mudou com o pivot). O Render segue
+pendente dos **passos manuais** — criar o Neon de produção, o repositório privado
+no GitHub e o serviço no painel do Render. Runbook em
+[`docs/deploy-render.md`](./docs/deploy-render.md).
 
-**Ainda não há cliente real**, e é por isso que o deploy pode subir agora: banco
-vazio, nenhum dado pessoal tratado. Antes do primeiro cliente: ter o CNPJ do
-operador, nomear o encarregado (DPO), preencher a política de privacidade e a
-ROPA, e assinar o adendo com o cliente (registrado por `npm run clientes --
-aceite`). Backlog em [`docs/lgpd-pendencias.md`](./docs/lgpd-pendencias.md);
-contexto na skill `lgpd-conciliador`.
+**Ainda não há cliente real.** Com a remoção do Pluggy, `cliente` passou a ser a
+**única tabela do produto com dado pessoal** — nada mais fica persistido
+localmente, o que simplifica bastante o backlog de LGPD. Antes do primeiro
+cliente: ter o CNPJ do operador, nomear o encarregado (DPO), preencher a política
+de privacidade e a ROPA, e assinar o adendo com o cliente (registrado por
+`npm run clientes -- aceite`). Backlog em
+[`docs/lgpd-pendencias.md`](./docs/lgpd-pendencias.md); contexto na skill
+`lgpd-conciliador`.
 
 Depois do Render, na ordem do briefing: escrita de lançamentos na Omie, WhatsApp,
 assinatura digital.
@@ -37,9 +48,9 @@ assinatura digital.
 ## Regras que não se quebram
 
 **Tudo é escopado por cliente.** Nunca leia credencial do ambiente — receba por
-parâmetro. Nunca consulte tabela de conciliação sem filtrar `cliente_id`. Cada
-cliente tem sua própria conta Omie **e sua própria conta Pluggy**: o cliente
-contrata o Pluggy e entrega as credenciais.
+parâmetro. Nenhuma rota de DRE/fluxo/oportunidades responde sem passar pelo
+`resolverCliente` (middleware), que resolve o cliente pelo slug da rota. Cada
+cliente tem sua própria conta Omie.
 
 **Credenciais de cliente vivem cifradas no banco**, nunca em `.env`, nunca em log.
 Perder `CREDENCIAIS_CHAVE` torna o que está guardado irrecuperável.
@@ -50,10 +61,10 @@ registrado (`src/lib/adendo.ts`; `npm run clientes -- aceite`). PII não vai par
 log — `src/lib/redacao.ts` mascara e o pino está fiado nela. Detalhes e checklist
 de auditoria na skill `lgpd-conciliador`.
 
-**O núcleo é puro e fica puro.** `matcher.ts`, `normalize.ts`, `oportunidades/analisar.ts`
-e `lib/` não fazem I/O. Isso é o que permite calibrar com fixtures sem tocar rede, e
-o que faz trocar de agregador de Open Finance custar um arquivo em vez do codebase.
-Não introduza I/O neles.
+**O núcleo é puro e fica puro.** `dre/montar.ts`, `oportunidades/analisar.ts` e
+`lib/` não fazem I/O — recebem o que já foi buscado na Omie e calculam. Isso é o
+que permite testar os limiares e as regras de apuração com fixtures, sem tocar
+rede. Não introduza I/O neles.
 
 **Dinheiro em centavos inteiros. Datas como string `AAAA-MM-DD`.** Float produz
 divergência onde não existe; comparar `Date` joga lançamento da meia-noite no dia
@@ -62,12 +73,7 @@ errado.
 **Dado fictício mora em `scripts/`, nunca em `src/`.** Não pode existir caminho pelo
 qual um número fake chegue ao relatório de um cliente.
 
-## As duas armadilhas que não fazem barulho
-
-**Sinal da Omie** (`src/conciliacao/normalize.ts`) — a doc da Omie não lista os
-valores de `cNatureza` nem diz se `nValorDocumento` vem assinado. Se a convenção
-estiver errada, entrada vira saída e **nada quebra visivelmente**. Confirme com
-`npm run smoke:omie -- --cliente X` antes de confiar em resultado.
+## A armadilha que não faz barulho
 
 **Vínculo categoria → DRE** — categoria e conta do DRE usam numerações parecidas e
 independentes. O único vínculo válido é o campo `codigo_dre` da categoria, e ele é
@@ -89,17 +95,12 @@ desenvolvimento está vazia.
 
 ## Ambiente
 
-As contas Omie e Pluggy de agosto/2026 são **só de desenvolvimento**: a Omie está
-praticamente vazia (conta "Caixinha", banco 999, um lançamento previsto) e o Pluggy
-usa o item de sandbox `Pluggy Bank Business` (conector 8, `user-ok`/`password-ok`).
+A conta Omie de agosto/2026 é **só de desenvolvimento**: está praticamente vazia
+(conta "Caixinha", banco 999, um lançamento previsto).
 
 Banco: Postgres no Neon (nuvem) — não há banco local. Node >= 22 (`.node-version`
 fixa 24). Em produção (`NODE_ENV=production`) o boot recusa subir se a
 `DATABASE_URL` não exigir TLS (`sslmode=require`).
-
-O Pluggy comercial custa **a partir de R$ 2.500/mês**, contra os ~US$ 5-7/mês que o
-briefing orçava para hospedagem. O agregador é o custo dominante do produto, e isso
-é decisão comercial, não detalhe de implementação.
 
 ## Entregáveis de apresentação
 
@@ -118,7 +119,7 @@ commitado.
 
 ## Ao relatar erro em painel web
 
-Se aparecer erro vago num dashboard SaaS (Neon, Render, Pluggy, Omie) — "algo deu
+Se aparecer erro vago num dashboard SaaS (Neon, Render, Omie) — "algo deu
 errado", botão que não responde, tela em branco — **sugira desligar a tradução
 automática do navegador e recarregar antes de investigar credenciais ou conta.**
 A tradução reescreve o DOM e quebra SPAs silenciosamente. Já custou tempo uma vez.
