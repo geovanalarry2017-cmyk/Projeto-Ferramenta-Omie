@@ -203,6 +203,10 @@
     display: flex; align-items: center; justify-content: center;
     background: var(--fundo);
   }
+  /* Duas classes para vencer o display:flex acima — .oculto sozinho tem a mesma
+     especificidade e perde por vir antes, o que deixaria a tela de login presa
+     na frente do dashboard mesmo depois do login dar certo. */
+  .tela-login.oculto { display: none; }
   .cartao-login {
     width: min(340px, calc(100vw - 32px));
     background: var(--superficie); border: 1px solid var(--borda);
