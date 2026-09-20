@@ -91,7 +91,7 @@ mapa e da lista de suboperadores. Não entregar o template em branco.
 | Pedido | Template |
 |---|---|
 | Política de privacidade | [`assets/politica-de-privacidade.md`](assets/politica-de-privacidade.md) — versão servida (rascunho) já existe em `public/politica-de-privacidade.html`, ligada no rodapé do dashboard; preencher os `«...»` e tirar o aviso de rascunho para publicar |
-| Adendo LGPD de operador (onboarding) | [`assets/adendo-lgpd-operador.md`](assets/adendo-lgpd-operador.md) |
+| Adendo LGPD de operador (onboarding) | [`assets/adendo-lgpd-operador.md`](assets/adendo-lgpd-operador.md) — processo de envio/assinatura (manual, via DocuSign) em [`docs/processo-assinatura-adendo.md`](../../../docs/processo-assinatura-adendo.md) |
 | Registro de operações de tratamento (ROPA, art. 37) | [`assets/registro-operacoes-tratamento.md`](assets/registro-operacoes-tratamento.md) |
 | Relatório de impacto (RIPD, art. 38) | [`assets/ripd-esqueleto.md`](assets/ripd-esqueleto.md) |
 | Runbook de requisição de titular | [`assets/runbook-requisicao-titular.md`](assets/runbook-requisicao-titular.md) |

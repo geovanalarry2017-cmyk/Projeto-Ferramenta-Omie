@@ -18,8 +18,9 @@ implementação — depende de você / de quem cuida do contrato.
 - [ ] **Adendo LGPD de operador assinado no onboarding.** Usar
   `assets/adendo-lgpd-operador.md` — encarregado e prazos já preenchidos
   (2026-09-20). Falta só: razão social/CNPJ do operador (pendente de constituir
-  PJ) e a assinatura de cada cliente. A máquina de registrar o aceite já existe
-  (abaixo).
+  PJ) e a assinatura de cada cliente. Processo de envio/assinatura (manual, via
+  DocuSign) documentado em `docs/processo-assinatura-adendo.md`. A máquina de
+  registrar o aceite já existe (abaixo).
 - [x] **Registrar o aceite do adendo no banco.** Migration
   `003_lgpd_adendo.sql` (`adendo_lgpd_versao`, `adendo_lgpd_aceito_em` em
   `cliente`). Regra pura em `src/lib/adendo.ts`. `criarCliente` cria o cliente
@@ -119,3 +120,7 @@ implementação — depende de você / de quem cuida do contrato.
   suboperador, 10 dias úteis de auxílio ao titular, 30 dias de
   exportação/eliminação pós-contrato). Só falta a razão social/CNPJ do
   operador, pendente de constituir PJ. — 2026-09-20
+- **Processo de assinatura do adendo documentado** —
+  `docs/processo-assinatura-adendo.md`: envio pelo DocuSign (manual, sem
+  integração de API), acompanhamento, e o comando `clientes -- aceite` depois
+  de assinado. — 2026-09-20
