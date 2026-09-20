@@ -280,8 +280,9 @@ em tempos evita o cold start, se isso incomodar. Trocar para `plan: starter` no
   `sync: false` — preenchidos uma vez no painel do Render, nunca no arquivo. Os
   de produção são **novos**, gerados na hora; não se reaproveita os de
   desenvolvimento.
-- **Migrations:** `preDeployCommand` roda `node dist/db/migrate.js` antes de cada
-  troca de instância. São idempotentes (`schema_migrations`).
+- **Migrations:** rodam no início do `startCommand` (`node dist/db/migrate.js
+  && node dist/index.js`) — o plano Free não suporta `preDeployCommand`. São
+  idempotentes (`schema_migrations`), então rodar em todo start é seguro.
 - **LGPD:** sem cliente cadastrado, o serviço sobe com o banco vazio e não trata
   dado pessoal. Um cliente só passa a ser processado depois de
   `npm run clientes -- aceite --cliente X --versao <adendo>`, que registra o

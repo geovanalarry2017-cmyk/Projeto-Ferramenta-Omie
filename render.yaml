@@ -16,11 +16,10 @@ services:
     region: oregon        # alinhe o projeto Neon a esta regiao (AWS us-west-2)
     branch: master
     buildCommand: npm ci && npm run build
-    # preDeployCommand roda antes de cada deploy trocar a instancia. As migrations
-    # sao idempotentes (tabela schema_migrations), entao rodar sempre e seguro.
-    # Usa o codigo ja compilado - nao depende de tsx (devDependency).
-    preDeployCommand: node dist/db/migrate.js
-    startCommand: node dist/index.js
+    # O plano Free nao suporta preDeployCommand, entao a migration roda aqui,
+    # antes do servidor subir. Idempotente (tabela schema_migrations) - seguro
+    # rodar em todo start, inclusive ao acordar do sono no plano Free.
+    startCommand: node dist/db/migrate.js && node dist/index.js
     # /health confere o banco (SELECT 1). Se o banco cair, o Render marca a
     # instancia como nao saudavel e nao roteia trafego para ela.
     healthCheckPath: /health

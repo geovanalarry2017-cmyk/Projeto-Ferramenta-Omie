@@ -37,9 +37,10 @@ Contexto que não muda com o deploy:
    checagem em `src/config/env.ts`).
 4. Guarde a string. Ela é a `DATABASE_URL` do passo 4.
 
-Não rode migration agora — o `preDeployCommand` (`node dist/db/migrate.js`) roda
-sozinho no primeiro deploy e em todos os seguintes. As migrations são
-idempotentes (tabela `schema_migrations`).
+Não rode migration agora — ela roda sozinha a cada start do servidor (ver passo
+5). O plano Free não suporta `preDeployCommand`, então a migration entra no
+início do `startCommand`; é idempotente (tabela `schema_migrations`), então
+rodar em todo boot é seguro.
 
 ---
 
@@ -82,9 +83,13 @@ repositório sempre esteve limpo).
 1. Render → **New** → **Blueprint**.
 2. Conecte a conta do GitHub e escolha o repositório. O Render encontra o
    `render.yaml` e mostra o serviço `omie-orquestrador` (Web, plano Free,
-   Oregon). (Se o `render.yaml` pedir `plan: starter`, o Render exige cartão
-   cadastrado antes de provisionar, mesmo com uso baixo — trocar para `free`
-   evita essa tela.)
+   Oregon). Duas pegadinhas já vistas nessa tela:
+   - Se o `render.yaml` pedir `plan: starter`, o Render exige cartão cadastrado
+     antes de provisionar, mesmo com uso baixo — usar `free` evita essa tela.
+   - O plano Free **não suporta `preDeployCommand`** — se o Blueprint reclamar
+     disso, é sinal de que o `render.yaml` do repo ainda tem essa chave; a
+     migration precisa estar embutida no `startCommand` (já é o caso na versão
+     atual do arquivo).
 3. Em **Environment Variables**, preencha os três marcados como *sync: false*:
    | Variável | Valor |
    |---|---|
@@ -103,15 +108,15 @@ Na aba **Logs**, na ordem:
 
 1. **Build** — `npm ci && npm run build` (compila e copia as migrations para
    `dist/db/migrations`).
-2. **Pre-Deploy** — `node dist/db/migrate.js`. Deve listar
-   `migration aplicada` para `001`, `002`, `003` e `004` e terminar com
-   `migrations concluidas`.
-3. **Deploy / Start** — `node dist/index.js` → `servidor no ar`.
-4. **Health check** — o Render chama `/health` até responder `200`. Fica
+2. **Deploy / Start** — `node dist/db/migrate.js && node dist/index.js`. O log
+   deve listar `migration aplicada` para `001`, `002`, `003` e `004`, terminar
+   com `migrations concluidas`, e então `servidor no ar`.
+3. **Health check** — o Render chama `/health` até responder `200`. Fica
    **Live** quando responde `{ "status": "ok", "banco": "ok" }`.
 
-Se parar no Pre-Deploy: quase sempre é `DATABASE_URL` errada ou sem
-`sslmode=require`.
+Se o start morrer antes de "servidor no ar": quase sempre é `DATABASE_URL`
+errada ou sem `sslmode=require` — a migration falha e o `&&` impede o servidor
+de subir.
 
 ---
 
@@ -151,7 +156,7 @@ mapear conta nem job para ligar.
 ## Notas
 
 - **autoDeploy** está `true`: todo push em `master` redeploya. As migrations
-  rodam no Pre-Deploy antes de a instância nova receber tráfego.
+  rodam a cada start (parte do `startCommand`), antes do servidor escutar.
 - **Rollback**: aba **Deploys** → **Rollback** para a versão anterior. Não há
   down-migration — mudança de schema é sempre para frente.
 - **Plano Free**: dorme após ~15 min sem requisição; a próxima leva ~30s-1min
