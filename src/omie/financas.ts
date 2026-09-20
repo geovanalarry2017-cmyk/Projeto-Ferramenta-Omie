@@ -7,8 +7,11 @@ import type {
   ListarContasReceberResponse,
   ListarMovimentosRequest,
   ListarMovimentosResponse,
+  ListarOrcamentosRequest,
+  ListarOrcamentosResponse,
   ListarTitulosRequest,
   MovimentoFinanceiro,
+  OrcamentoCategoria,
   TituloCadastro,
 } from './types.js';
 
@@ -146,4 +149,31 @@ export function listarContasPagar(
     ate,
     codigoContaCorrente,
   );
+}
+
+/**
+ * Orcamento de caixa (Previsto x Realizado) de um mes, por categoria.
+ *
+ * Diferente do DRE/fluxo, a Omie nao aceita periodo livre aqui — so mes/ano
+ * fechado. Vem vazio se o cliente nunca cadastrou orcamento na Omie (Financas
+ * > Orcamento de Caixa); isso nao e erro, e o estado normal de quem nao usa
+ * o modulo.
+ */
+export async function listarOrcamento(
+  credenciais: CredenciaisOmie,
+  ano: number,
+  mes: number,
+): Promise<OrcamentoCategoria[]> {
+  try {
+    const resposta = await chamarOmie<ListarOrcamentosResponse, ListarOrcamentosRequest>(
+      credenciais,
+      'financas/caixa',
+      'ListarOrcamentos',
+      { nAno: ano, nMes: mes },
+    );
+    return resposta.ListaOrcamentos ?? [];
+  } catch (erro) {
+    if (ehRespostaVazia(erro)) return [];
+    throw erro;
+  }
 }

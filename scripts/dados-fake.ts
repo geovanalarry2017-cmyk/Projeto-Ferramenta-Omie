@@ -1,5 +1,5 @@
 import { paraFormatoOmie, somarDias, type DataISO } from '../src/lib/dates.js';
-import type { Categoria, ContaDRE, MovimentoFinanceiro } from '../src/omie/types.js';
+import type { Categoria, ContaDRE, MovimentoFinanceiro, OrcamentoCategoria } from '../src/omie/types.js';
 
 
 /**
@@ -322,4 +322,32 @@ export function listarMovimentosFake(
   }
 
   return encontrados;
+}
+
+// ---------------------------------------------------------------------------
+// Orcamento de caixa (Previsto x Realizado)
+// ---------------------------------------------------------------------------
+
+/**
+ * Faz o papel de `listarOrcamento` da Omie: uma linha por categoria do dia a
+ * dia (as mesmas que entram no sorteio de movimentos — categoria sem
+ * movimento tambem nao costuma ter orcamento cadastrado). Deterministico por
+ * mes: o mesmo ano/mes sempre devolve os mesmos numeros.
+ */
+export function listarOrcamentoFake(ano: number, mes: number): OrcamentoCategoria[] {
+  const rnd = gerador(semente(`orcamento-demo:${ano}-${mes}`));
+
+  return SORTEAVEIS.map((perfil) => {
+    const previsto = dinheiro(rnd, perfil.valorMin, perfil.valorMax);
+    // Realizado varia -35%/+35% do previsto: as vezes estoura, as vezes sobra.
+    const fator = 0.65 + rnd() * 0.7;
+    const realizado = Math.round(previsto * fator * 100) / 100;
+
+    return {
+      cCodCateg: perfil.codigo,
+      cDesCateg: perfil.descricao,
+      nValorPrevisto: previsto,
+      nValorRealilzado: realizado,
+    };
+  });
 }

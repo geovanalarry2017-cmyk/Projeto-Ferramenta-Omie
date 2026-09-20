@@ -162,3 +162,31 @@ export interface ListarMovimentosResponse {
   nTotRegistros?: number;
   movimentos?: MovimentoFinanceiro[];
 }
+
+// ---------- /financas/caixa/ : ListarOrcamentos ----------
+
+export interface ListarOrcamentosRequest {
+  nAno: number;
+  nMes: number;
+}
+
+export interface OrcamentoCategoria {
+  cCodCateg?: string;
+  cDesCateg?: string;
+  nValorPrevisto?: number;
+  /**
+   * Grafia exata da documentacao da Omie ("Realilzado", nao "Realizado") —
+   * nao "arrumar", e assim que o campo chega. `nValorRealizado` fica como
+   * alias tolerado: nao foi possivel confirmar contra uma conta real com
+   * orcamento cadastrado, e um nome de campo errado aqui zeraria a coluna
+   * inteira em silencio.
+   */
+  nValorRealilzado?: number;
+  nValorRealizado?: number;
+}
+
+export interface ListarOrcamentosResponse {
+  nAno?: number;
+  nMes?: number;
+  ListaOrcamentos?: OrcamentoCategoria[];
+}

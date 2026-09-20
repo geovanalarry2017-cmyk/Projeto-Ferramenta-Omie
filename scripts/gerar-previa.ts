@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import type { DataISO } from '../src/lib/dates.js';
 import { montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
 import { analisarOportunidades } from '../src/oportunidades/analisar.js';
-import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake } from './dados-fake.js';
+import { montarOrcamento } from '../src/orcamento/montar.js';
+import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake, listarOrcamentoFake } from './dados-fake.js';
 
 /**
  * Gera uma previa estatica do dashboard, para apresentar sem servidor.
@@ -92,6 +93,15 @@ function apurar(de: DataISO, ate: DataISO) {
   const dreCaixa = montarDRE(CONTAS_DRE, CATEGORIAS, movimentosCaixa, caixa);
   const mensalCaixa = montarDREMensal(CONTAS_DRE, CATEGORIAS, movimentosCaixa, caixa);
 
+  // A pagina pede o orcamento do mes do fim do periodo (mesma regra do
+  // carregarOrcamento em public/index.html) — a Omie so entrega mes fechado.
+  const [anoOrcamento, mesOrcamento] = ate.split('-').map(Number) as [number, number];
+  const orcamento = montarOrcamento(
+    anoOrcamento,
+    mesOrcamento,
+    listarOrcamentoFake(anoOrcamento, mesOrcamento),
+  );
+
   return {
     periodo: { de, ate },
     clientes: [CLIENTE_DEMO],
@@ -106,6 +116,7 @@ function apurar(de: DataISO, ate: DataISO) {
     fluxo,
     // Oportunidades sao sempre regime de caixa, como na rota real.
     oportunidades: analisarOportunidades({ dre: dreCaixa, mensal: mensalCaixa, fluxo, de, ate }),
+    orcamento,
   };
 }
 
@@ -150,6 +161,7 @@ window.fetch = async (caminho) => {
   else if (rota.endsWith('/dre-mensal')) corpo = PREVIA.mensal[regime];
   else if (rota.endsWith('/fluxo-caixa')) corpo = PREVIA.fluxo;
   else if (rota.endsWith('/oportunidades')) corpo = PREVIA.oportunidades;
+  else if (rota.endsWith('/orcamento')) corpo = PREVIA.orcamento;
 
   const achou = corpo !== null;
   return new Response(JSON.stringify(achou ? corpo : { erro: 'Rota fora da prévia.' }), {

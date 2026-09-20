@@ -6,7 +6,8 @@ import type { DataISO } from '../src/lib/dates.js';
 import { montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
 import { analisarOportunidades } from '../src/oportunidades/analisar.js';
 import type { Regime } from '../src/dre/types.js';
-import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake } from './dados-fake.js';
+import { montarOrcamento } from '../src/orcamento/montar.js';
+import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake, listarOrcamentoFake } from './dados-fake.js';
 
 /**
  * Servidor de demonstracao: o dashboard de verdade, com numeros fabricados.
@@ -133,6 +134,18 @@ app.get('/clientes/:cliente/oportunidades', (req: Request, res: Response) => {
       ...periodo,
     }),
   );
+});
+
+app.get('/clientes/:cliente/orcamento', (req: Request, res: Response) => {
+  const ano = Number(req.query.ano);
+  const mes = Number(req.query.mes);
+
+  if (!Number.isInteger(ano) || !Number.isInteger(mes) || mes < 1 || mes > 12) {
+    res.status(400).json({ erro: 'Informe ano (AAAA) e mes (1 a 12) validos.' });
+    return;
+  }
+
+  res.json(montarOrcamento(ano, mes, listarOrcamentoFake(ano, mes)));
 });
 
 app.use(express.static(PASTA_PUBLICA));
