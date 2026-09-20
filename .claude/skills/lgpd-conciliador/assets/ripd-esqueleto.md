@@ -7,7 +7,7 @@
 > do aceite do adendo. Preencher `«…»` com a análise real; não entregar em
 > branco.
 
-Elaborado por: «nome» — Data: 2026-09-20 — Versão: v2.
+Elaborado por: Geovana Ferraz — Data: 2026-09-20 — Versão: v2.
 
 ## 1. Descrição do tratamento
 

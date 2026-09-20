@@ -71,7 +71,7 @@ a ela o suporte necessário para atender ao pedido.
 
 ## 8. Encarregado (DPO)
 
-«Nome» — «e-mail/canal».
+Geovana Ferraz — geovana.larry2017@gmail.com.
 
 ## 9. Alterações
 

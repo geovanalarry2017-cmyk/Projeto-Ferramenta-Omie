@@ -6,13 +6,14 @@
 > retenção). Uma cópia consolidada + um anexo por cliente controlador quando os
 > prazos de retenção variarem.
 
-Responsável pelo registro: «encarregado / nome» — Última revisão: 2026-09-20.
+Responsável pelo registro: Geovana Ferraz — Última revisão: 2026-09-20.
 
 ## Identificação
 
-- **Operador**: «razão social», CNPJ «…».
-- **Encarregado**: «nome», «contato».
-- **Controladores**: empresas clientes listadas em «anexo / tabela `cliente`».
+- **Operador**: «razão social», CNPJ «pendente — operador ainda não constituiu PJ».
+- **Encarregado**: Geovana Ferraz, geovana.larry2017@gmail.com.
+- **Controladores**: empresas clientes listadas na tabela `cliente` do banco de
+  produção.
 
 ## Operações
 

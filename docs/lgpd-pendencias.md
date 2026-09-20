@@ -16,8 +16,10 @@ Código e trava técnica estão prontos. O que resta é **dado real e revisão**
 implementação — depende de você / de quem cuida do contrato.
 
 - [ ] **Adendo LGPD de operador assinado no onboarding.** Usar
-  `assets/adendo-lgpd-operador.md`. Falta: razão social/CNPJ do operador, e a
-  assinatura de cada cliente. A máquina de registrar o aceite já existe (abaixo).
+  `assets/adendo-lgpd-operador.md` — encarregado e prazos já preenchidos
+  (2026-09-20). Falta só: razão social/CNPJ do operador (pendente de constituir
+  PJ) e a assinatura de cada cliente. A máquina de registrar o aceite já existe
+  (abaixo).
 - [x] **Registrar o aceite do adendo no banco.** Migration
   `003_lgpd_adendo.sql` (`adendo_lgpd_versao`, `adendo_lgpd_aceito_em` em
   `cliente`). Regra pura em `src/lib/adendo.ts`. `criarCliente` cria o cliente
@@ -34,14 +36,18 @@ implementação — depende de você / de quem cuida do contrato.
   `tests/logger.test.ts` (5). — 2026-09-05
 - [ ] **Política de privacidade publicada.** Estrutura pronta: rascunho servido
   em `public/politica-de-privacidade.html`, ligado no rodapé do dashboard
-  (`public/index.html`). Falta: preencher os `«...»` (razão social, DPO),
-  revisar e remover o aviso de rascunho. Manter em sincronia com
+  (`public/index.html`), encarregado já preenchido. Falta só: razão social/CNPJ
+  do operador (`«nome do produto»`, pendente de constituir PJ), revisar e
+  remover o aviso de rascunho. Manter em sincronia com
   `assets/politica-de-privacidade.md`.
-- [ ] **Nomear encarregado (DPO) e publicar contato.** Decisão sua. Entra na
-  política (hoje "a definir" no rodapé), no adendo e na ROPA.
+- [x] **Nomear encarregado (DPO) e publicar contato.** Geovana Ferraz,
+  geovana.larry2017@gmail.com — preenchido no rodapé do dashboard, na política
+  (`.md` e `.html`), no adendo, na ROPA, no runbook de incidente e no RIPD.
+  — 2026-09-20
 - [ ] **ROPA preenchida** (art. 37) a partir de
-  `assets/registro-operacoes-tratamento.md` + mapa de dados. Falta razão
-  social/CNPJ, contato do encarregado e prazo de retenção por controlador.
+  `assets/registro-operacoes-tratamento.md` + mapa de dados — encarregado já
+  preenchido, retenção já resolvida como "não se aplica" (nada é persistido).
+  Falta só razão social/CNPJ do operador.
 - [x] **Exigir `sslmode=require` no banco em produção.** `src/config/env.ts`
   (`superRefine`) recusa o boot em `NODE_ENV=production` se a `DATABASE_URL` não
   pedir TLS (`require`/`verify-ca`/`verify-full`). Testes: `tests/env.test.ts`.
@@ -106,3 +112,10 @@ implementação — depende de você / de quem cuida do contrato.
   v2, ROPA, RIPD, runbooks) atualizados; o item P1 de retenção/expurgo e o P2 de
   minimização na ingestão saíram do backlog por não terem mais objeto — ver
   P1/P2 acima. — 2026-09-20
+- **Encarregado (DPO) nomeado**: Geovana Ferraz, geovana.larry2017@gmail.com —
+  preenchido no rodapé do dashboard, na política de privacidade (`.md` e
+  `.html`), no adendo (§13), na ROPA, no runbook de incidente e no RIPD. Prazos
+  do adendo também preenchidos com valores padrão (15 dias de aviso de troca de
+  suboperador, 10 dias úteis de auxílio ao titular, 30 dias de
+  exportação/eliminação pós-contrato). Só falta a razão social/CNPJ do
+  operador, pendente de constituir PJ. — 2026-09-20

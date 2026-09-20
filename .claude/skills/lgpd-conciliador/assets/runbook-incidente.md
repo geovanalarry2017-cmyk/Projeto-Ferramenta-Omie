@@ -60,5 +60,5 @@ que ele precisar (logs escopados, linha do tempo, parecer técnico).
 
 ## Contatos
 
-- Encarregado do operador: «nome», «canal».
+- Encarregado do operador: Geovana Ferraz, geovana.larry2017@gmail.com.
 - Contatos de incidente dos suboperadores: Neon «…», Render «…», Omie «…».

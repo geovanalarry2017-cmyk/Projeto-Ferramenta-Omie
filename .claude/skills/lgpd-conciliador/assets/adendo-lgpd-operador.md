@@ -8,8 +8,8 @@
 Este Adendo integra o Contrato de Prestação de Serviços entre:
 
 - **Controlador**: «razão social do cliente», CNPJ «…», doravante "Controlador";
-- **Operador**: «razão social do fornecedor do conciliador», CNPJ «…», doravante
-  "Operador".
+- **Operador**: «razão social do fornecedor do visualizador», CNPJ «pendente —
+  operador ainda não constituiu PJ», doravante "Operador".
 
 ## 1. Objeto
 
@@ -65,7 +65,8 @@ obrigações de proteção equivalentes às deste Adendo:
 | Render | hospedagem da aplicação | Estados Unidos (Oregon) |
 
 Novo suboperador só entra após comunicação ao Controlador, que poderá se opor no
-prazo de «15» dias. A lista atual fica em «URL/anexo».
+prazo de 15 dias. A lista atual fica na seção 4 da Política de Privacidade do
+Operador.
 
 ## 7. Transferência internacional (art. 33)
 
@@ -99,7 +100,7 @@ caixa/oportunidades a partir da Omie, sem conciliação bancária/Open Finance).
 ## 10. Direitos do titular (art. 18)
 
 Requisições de titular são recebidas e respondidas pelo **Controlador**. O
-Operador auxilia em até «10» dias úteis, fornecendo exportação, correção ou
+Operador auxilia em até 10 dias úteis, fornecendo exportação, correção ou
 eliminação dos dados do Controlador, escopadas ao seu cadastro. O Operador não
 responde diretamente a titulares.
 
@@ -112,14 +113,14 @@ conduzida pelo Controlador. Procedimento em «runbook-incidente».
 
 ## 12. Término (art. 15, 16)
 
-Encerrado o contrato, o Operador, conforme instrução do Controlador em até «30»
+Encerrado o contrato, o Operador, conforme instrução do Controlador em até 30
 dias: (a) exporta e devolve os dados e (b) os elimina em definitivo de suas bases
 e as dos suboperadores, salvo obrigação legal de guarda, informando por escrito a
 conclusão.
 
 ## 13. Encarregado
 
-Encarregado do Operador: «nome», «e-mail/canal».
+Encarregado do Operador: Geovana Ferraz, geovana.larry2017@gmail.com.
 Encarregado do Controlador: «nome», «e-mail/canal».
 
 ---

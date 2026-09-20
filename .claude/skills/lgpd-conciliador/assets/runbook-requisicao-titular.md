@@ -9,7 +9,7 @@
 - Só agir sobre pedido de um **cliente identificado** (controlador). Pedido que
   chega direto de um titular: responder que ele deve procurar a empresa
   controladora, e avisar essa empresa se ela for identificável.
-- Prazo de auxílio ao controlador: «10» dias úteis (alinhar ao adendo).
+- Prazo de auxílio ao controlador: 10 dias úteis (mesmo prazo do adendo, §10).
 - Toda ação escopada por `cliente_id`. Nunca varrer o banco inteiro.
 - Registrar a ação (quem executou, quando, qual cliente, qual pedido) **sem** PII
   do titular no registro.
