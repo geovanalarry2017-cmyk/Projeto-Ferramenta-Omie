@@ -126,19 +126,16 @@ describe('previa estatica', () => {
     expect(texto).not.toMatch(/cliente|período|Rota fora da prévia/i);
   });
 
-  it('fixa o periodo e esconde o token sem tirar do DOM', () => {
+  it('fixa o periodo e esconde a tela de login', () => {
     const de = doc.getElementById('de') as HTMLInputElement;
     const ate = doc.getElementById('ate') as HTMLInputElement;
     expect(de.value).toBe(DE);
     expect(ate.value).toBe(ATE);
     expect(de.disabled).toBe(true);
 
-    // Remover o campo quebra a troca de aba: a pagina le `$('token').value` la
-    // sem protecao, e a aba de oportunidades abriria vazia.
-    const token = doc.getElementById('token') as HTMLInputElement;
-    expect(token, 'o campo de token nao pode sair do DOM').not.toBeNull();
-    expect(token.value).toBeTruthy();
-    expect(token.closest('.campo')?.classList.contains('oculto')).toBe(true);
+    // Sem servidor nao ha sessao de verdade — a previa nunca pode ficar presa
+    // atras da tela de login.
+    expect(doc.getElementById('tela-login')?.classList.contains('oculto')).toBe(true);
   });
 
   it('carrega o mapa de oportunidades ao trocar de aba', async () => {

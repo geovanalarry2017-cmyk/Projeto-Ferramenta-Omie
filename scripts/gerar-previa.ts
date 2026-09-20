@@ -177,23 +177,13 @@ const SCRIPT_FINAL = `
     campo.title = 'Período fixo nesta prévia.';
   }
 
-  // Token e um detalhe de infraestrutura; numa reuniao comercial parece uma
-  // barreira de acesso. Some da tela, mas continua no DOM: a pagina le
-  // \`$('token').value\` no boot, na troca de aba e a cada carga, e a leitura da
-  // troca de aba nao esta protegida — com o campo removido, a aba do Mapa de
-  // Oportunidades abre vazia e o erro fica so no console.
-  const token = document.getElementById('token');
-  token.value = 'previa';
-  token.closest('.campo').classList.add('oculto');
-
-  // A carga e refeita aqui porque a da pagina ja desistiu. Ela so busca se
-  // houver token, e o script da pagina zera o campo com o localStorage (vazio,
-  // num arquivo aberto de file://) depois de qualquer valor que a previa
-  // coloque antes dele. Sem isto a tela monta inteira e nenhum numero aparece:
-  // cartoes em "—" e tabelas vazias, sem nada indicando que faltou algo.
-  carregarClientes().then((temCliente) => {
-    if (temCliente) void carregar();
-  });
+  // A previa nao tem servidor por tras, entao nao ha sessao de verdade para
+  // logar — a tela de login (que comeca visivel por padrao) so atrapalharia.
+  // carregarClientes() (chamado pelo proprio script da pagina, la embaixo,
+  // contra o fetch ja trocado por PREVIA acima) ja teria escondido a tela
+  // sozinho, mas isto garante que nao fica um instante de login a mostra caso
+  // a ordem dos scripts mude no futuro.
+  esconderTelaLogin();
 
   const nota = document.createElement('div');
   nota.className = 'sub';

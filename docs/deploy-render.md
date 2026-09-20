@@ -12,8 +12,9 @@ Contexto que não muda com o deploy:
   registrado. Mesmo depois disso, o Postgres não guarda dado de transação
   nenhum — DRE, fluxo de caixa e oportunidades são buscados na Omie a cada
   consulta.
-- **Os segredos de desenvolvimento não vão para produção.** `CREDENCIAIS_CHAVE`
-  e `API_TOKEN` de produção são novos, gerados no passo 2.
+- **Os segredos de desenvolvimento não vão para produção.**
+  `CREDENCIAIS_CHAVE`, `SESSAO_CHAVE` e `API_TOKEN` de produção são novos,
+  gerados no passo 2.
 
 ---
 
@@ -53,7 +54,12 @@ Dois valores novos, **diferentes** dos de desenvolvimento:
 # cliente. Se for perdida, o que estiver cifrado no banco fica irrecuperável.
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# API_TOKEN — protege as rotas de dados e o dashboard.
+# SESSAO_CHAVE — 32 bytes em hex, mesmo comando. Assina o cookie de login dos
+# usuários. Perdê-la só desloga todo mundo — nenhuma credencial se perde.
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# API_TOKEN — para automação/scripts internos via header X-API-Token (não é
+# o que o dashboard usa; o dashboard loga por usuário).
 node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
 ```
 
@@ -90,11 +96,12 @@ repositório sempre esteve limpo).
      disso, é sinal de que o `render.yaml` do repo ainda tem essa chave; a
      migration precisa estar embutida no `startCommand` (já é o caso na versão
      atual do arquivo).
-3. Em **Environment Variables**, preencha os três marcados como *sync: false*:
+3. Em **Environment Variables**, preencha os quatro marcados como *sync: false*:
    | Variável | Valor |
    |---|---|
    | `DATABASE_URL` | connection string do passo 1 (com `?sslmode=require`) |
    | `CREDENCIAIS_CHAVE` | hex do passo 2 |
+   | `SESSAO_CHAVE` | hex do passo 2 |
    | `API_TOKEN` | token do passo 2 |
 
    As demais (`NODE_ENV`, `OMIE_BASE_URL`, `LOG_LEVEL`) já vêm do `render.yaml`.
@@ -111,8 +118,8 @@ Na aba **Logs**, na ordem:
    `NODE_ENV=production` faria o `npm ci` pular as devDependencies (TypeScript
    e os `@types/*`), e o `tsc` quebraria por falta de tipo.
 2. **Deploy / Start** — `node dist/db/migrate.js && node dist/index.js`. O log
-   deve listar `migration aplicada` para `001`, `002`, `003` e `004`, terminar
-   com `migrations concluidas`, e então `servidor no ar`.
+   deve listar `migration aplicada` para `001` a `005`, terminar com
+   `migrations concluidas`, e então `servidor no ar`.
 3. **Health check** — o Render chama `/health` até responder `200`. Fica
    **Live** quando responde `{ "status": "ok", "banco": "ok" }`.
 
@@ -127,10 +134,13 @@ de subir.
 Na URL pública do serviço (`https://omie-orquestrador.onrender.com` ou similar):
 
 - `GET /health` → `{ "status": "ok", "banco": "ok" }`.
-- `/` abre o dashboard. O rodapé da lateral mostra o link **Política de
-  Privacidade** (rascunho) e "Encarregado (DPO): a definir".
-- `GET /clientes` com o header `X-API-Token: <API_TOKEN>` → `[]` (banco vazio).
-- Sem o header, a mesma rota → `401`. É o esperado.
+- `/` abre a tela de login. O rodapé da lateral mostra o link **Política de
+  Privacidade** (rascunho) e o encarregado (DPO).
+- `GET /clientes` sem cookie de sessão → `401`. É o esperado — nenhum cliente
+  nem usuário existe ainda no banco de produção. Cadastre o primeiro com
+  `npm run clientes -- criar`, `clientes -- aceite` e `usuarios -- criar`
+  (localmente, apontando a `DATABASE_URL` para a de produção) e faça login em
+  `/` com o e-mail/senha desse usuário.
 
 Se o dashboard abrir com erro vago ("algo deu errado", tela em branco): antes de
 mexer em credencial, desligue a tradução automática do navegador e recarregue —

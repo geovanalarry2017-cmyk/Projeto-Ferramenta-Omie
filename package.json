@@ -17,7 +17,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "demo": "tsx scripts/servidor-demo.ts",
     "previa": "tsx scripts/gerar-previa.ts",
-    "clientes": "tsx src/cli/clientes.ts"
+    "clientes": "tsx src/cli/clientes.ts",
+    "usuarios": "tsx src/cli/usuarios.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

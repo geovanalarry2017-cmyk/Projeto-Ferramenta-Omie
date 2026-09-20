@@ -4,16 +4,44 @@ import type { ClienteResumo } from '../clientes/types.js';
 import { env } from '../config/env.js';
 import { adendoLgpdPendente } from '../lib/adendo.js';
 import { compararSegredos } from '../lib/cripto.js';
+import { type PayloadSessao, verificarTokenSessao } from '../lib/sessao.js';
+import { lerCookie, NOME_COOKIE_SESSAO } from './cookies.js';
 
 /** O cliente resolvido pela rota, anexado a requisicao. */
 export interface RequisicaoComCliente extends Request {
   cliente?: ClienteResumo;
 }
 
+/** A sessao do usuario logado, anexada a requisicao. */
+export interface RequisicaoComSessao extends Request {
+  sessao?: PayloadSessao;
+}
+
 /**
- * As rotas leem dados financeiros. Deixa-las abertas seria convite a abuso,
- * entao exigem um token compartilhado. Nao substitui autenticacao de verdade —
- * e o minimo para nao expor os endpoints.
+ * Rotas de dado exigem um usuario logado (cookie de sessao — ver
+ * src/http/routes/auth.ts). Substitui o antigo token compartilhado: agora
+ * cada requisicao carrega qual usuario e qual cliente a fizeram.
+ */
+export function exigirSessao(
+  req: RequisicaoComSessao,
+  res: Response,
+  next: NextFunction,
+): void {
+  const token = lerCookie(req, NOME_COOKIE_SESSAO);
+  const sessao = token ? verificarTokenSessao(token, env.SESSAO_CHAVE) : null;
+
+  if (!sessao) {
+    res.status(401).json({ erro: 'Sessao invalida ou expirada. Faca login novamente.' });
+    return;
+  }
+
+  req.sessao = sessao;
+  next();
+}
+
+/**
+ * Token compartilhado por header, para automacao/scripts internos (fora do
+ * dashboard). As rotas voltadas ao usuario final usam `exigirSessao`.
  */
 export function exigirToken(req: Request, res: Response, next: NextFunction): void {
   const token = req.header('x-api-token');
@@ -30,12 +58,14 @@ export function exigirToken(req: Request, res: Response, next: NextFunction): vo
 /**
  * Resolve :cliente (slug) e anexa a requisicao.
  *
- * Toda rota de dados passa por aqui. Com varios clientes no mesmo banco, uma
- * consulta que nao filtre por cliente entrega dado financeiro de um cliente
- * para outro.
+ * Toda rota de dados passa por aqui, depois de `exigirSessao`. Com varios
+ * clientes no mesmo banco, uma consulta que nao filtre por cliente entrega
+ * dado financeiro de um cliente para outro — e com login por usuario, o
+ * :cliente da URL tem que ser o mesmo cliente da sessao, senao um usuario
+ * logado poderia so trocar o slug na URL para ver dado de outra empresa.
  */
 export async function resolverCliente(
-  req: RequisicaoComCliente,
+  req: RequisicaoComCliente & RequisicaoComSessao,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
@@ -49,6 +79,11 @@ export async function resolverCliente(
   const cliente = await buscarPorSlug(slug);
   if (!cliente) {
     res.status(404).json({ erro: `Cliente "${slug}" nao encontrado.` });
+    return;
+  }
+
+  if (req.sessao && req.sessao.clienteId !== cliente.id) {
+    res.status(403).json({ erro: 'Esta sessao nao pertence a este cliente.' });
     return;
   }
 

@@ -32,6 +32,8 @@ services:
         sync: false
       - key: CREDENCIAIS_CHAVE
         sync: false
+      - key: SESSAO_CHAVE
+        sync: false
       - key: API_TOKEN
         sync: false
       # Liga o modo producao no env.ts: entre outras coisas, recusa subir se a

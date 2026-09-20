@@ -20,25 +20,38 @@ removidos (migration `004_remover_pluggy_e_conciliacao.sql`, **ainda não aplica
 em nenhum banco**). O dashboard não perdeu tela nenhuma — já era 100% Omie antes
 do corte.
 
-**96 testes em 9 arquivos, `npm run typecheck` limpo.**
+**Segunda mudança do dia: login por usuário, para vender por assento.** Cada
+cliente (empresa) pode ter vários usuários — e-mail/senha próprios
+(`src/usuarios/`, tabela `usuario`) — todos vendo os mesmos dados, e é a
+quantidade de usuários **ativos** que o contrato limita
+(`cliente.limite_usuarios`). Login emite um cookie de sessão assinado por HMAC
+(`src/lib/sessao.ts`, sem dependência nova); `exigirSessao` substituiu
+`exigirToken` nas rotas que o dashboard consome — `API_TOKEN` continua só para
+automação/script interno. `resolverCliente` recusa (403) sessão de um cliente
+tentando ler dado de outro. Migration `005_usuarios.sql` **já aplicada no Neon
+de dev**. CLI: `npm run usuarios -- listar\|criar\|limite\|ativar\|desativar`.
+
+**107 testes em 11 arquivos, `npm run typecheck` limpo.**
 
 Pronto: DRE (caixa e competência), DRE mês a mês, fluxo de caixa, mapa de
-oportunidades, dashboard com sete gráficos e tema claro/escuro, prévia estática
-(`npm run previa`), redação de PII no log, e a trava técnica do adendo LGPD
-(cliente nasce inativo, não é processado sem o aceite registrado).
+oportunidades, dashboard com sete gráficos, tema claro/escuro e tela de login,
+prévia estática (`npm run previa`, sem login), redação de PII no log, e as
+travas técnicas do adendo LGPD (cliente nasce inativo) e da sessão (usuário só
+vê o próprio cliente).
 
 Layout e proposta foram **aprovados na reunião de 31/08/2026, sem pedidos de
-mudança** (isso era sobre a UI, que não mudou com o pivot). O Render segue
-pendente dos **passos manuais** — criar o Neon de produção, o repositório privado
-no GitHub e o serviço no painel do Render. Runbook em
-[`docs/deploy-render.md`](./docs/deploy-render.md).
+mudança** (isso era sobre a UI, que não mudou de propósito com os dois pivots —
+só ganhou a tela de login). O Render segue pendente dos **passos manuais** —
+criar o Neon de produção, o repositório privado no GitHub e o serviço no
+painel do Render. Runbook em [`docs/deploy-render.md`](./docs/deploy-render.md).
 
-**Ainda não há cliente real.** Com a remoção do Pluggy, `cliente` passou a ser a
-**única tabela do produto com dado pessoal** — nada mais fica persistido
-localmente, o que simplifica bastante o backlog de LGPD. Antes do primeiro
-cliente: ter o CNPJ do operador, nomear o encarregado (DPO), preencher a política
-de privacidade e a ROPA, e assinar o adendo com o cliente (registrado por
-`npm run clientes -- aceite`). Backlog em
+**Ainda não há cliente real.** Com a remoção do Pluggy, `cliente` e `usuario`
+são as **duas únicas tabelas do produto com dado pessoal** — nada mais fica
+persistido localmente, o que simplifica bastante o backlog de LGPD. Antes do
+primeiro cliente: ter o CNPJ do operador, nomear o encarregado (DPO — já
+feito), preencher a política de privacidade e a ROPA, e assinar o adendo com o
+cliente (registrado por `npm run clientes -- aceite`, seguido de
+`npm run usuarios -- criar` para o primeiro login). Backlog em
 [`docs/lgpd-pendencias.md`](./docs/lgpd-pendencias.md); contexto na skill
 `lgpd-conciliador`.
 
@@ -48,12 +61,17 @@ assinatura digital.
 ## Regras que não se quebram
 
 **Tudo é escopado por cliente.** Nunca leia credencial do ambiente — receba por
-parâmetro. Nenhuma rota de DRE/fluxo/oportunidades responde sem passar pelo
-`resolverCliente` (middleware), que resolve o cliente pelo slug da rota. Cada
-cliente tem sua própria conta Omie.
+parâmetro. Nenhuma rota de DRE/fluxo/oportunidades responde sem passar por
+`exigirSessao` + `resolverCliente` (middleware), que resolve o cliente pelo
+slug da rota **e confere que é o mesmo cliente da sessão do usuário logado**.
+Cada cliente tem sua própria conta Omie; cada usuário pertence a um único
+cliente.
 
 **Credenciais de cliente vivem cifradas no banco**, nunca em `.env`, nunca em log.
-Perder `CREDENCIAIS_CHAVE` torna o que está guardado irrecuperável.
+Perder `CREDENCIAIS_CHAVE` torna o que está guardado irrecuperável. Senha de
+usuário nunca em texto puro — só hash (`src/lib/senha.ts`, scrypt + sal);
+sessão é um cookie assinado por `SESSAO_CHAVE` (`src/lib/sessao.ts`), não
+cifrado (não carrega segredo, só ids e validade).
 
 **O produto é operador de LGPD; cada cliente é o controlador.** Cliente nasce
 inativo e nenhum entrypoint processa dados dele antes do aceite do adendo estar
@@ -112,10 +130,10 @@ partir de `public/index.html`. Não ofereça link que dependa de login.
 ## Segurança do próprio histórico
 
 Os transcripts das sessões (`~/.claude/projects/<caminho-codificado>/*.jsonl`)
-contêm `DATABASE_URL` com a senha do Neon, `CREDENCIAIS_CHAVE` e `API_TOKEN` **em
-texto puro**. São tão sensíveis quanto o `.env`: nunca por e-mail, WhatsApp, nuvem
-pública ou anexo em ticket. O repositório em si está limpo — o `.env` nunca foi
-commitado.
+contêm `DATABASE_URL` com a senha do Neon, `CREDENCIAIS_CHAVE`, `SESSAO_CHAVE`
+e `API_TOKEN` **em texto puro**. São tão sensíveis quanto o `.env`: nunca por
+e-mail, WhatsApp, nuvem pública ou anexo em ticket. O repositório em si está
+limpo — o `.env` nunca foi commitado.
 
 ## Ao relatar erro em painel web
 

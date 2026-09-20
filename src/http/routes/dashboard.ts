@@ -7,7 +7,7 @@ import {
 } from '../../dre/service.js';
 import type { Regime } from '../../dre/types.js';
 import {
-  exigirToken,
+  exigirSessao,
   lerPeriodo,
   resolverCliente,
   type RequisicaoComCliente,
@@ -17,7 +17,7 @@ export const rotasDashboard = Router();
 
 rotasDashboard.get(
   '/clientes/:cliente/dre',
-  exigirToken,
+  exigirSessao,
   resolverCliente,
   async (req: RequisicaoComCliente, res: Response): Promise<void> => {
     const periodo = lerPeriodo(req, res);
@@ -31,7 +31,7 @@ rotasDashboard.get(
 
 rotasDashboard.get(
   '/clientes/:cliente/dre-mensal',
-  exigirToken,
+  exigirSessao,
   resolverCliente,
   async (req: RequisicaoComCliente, res: Response): Promise<void> => {
     const periodo = lerPeriodo(req, res);
@@ -45,7 +45,7 @@ rotasDashboard.get(
 
 rotasDashboard.get(
   '/clientes/:cliente/fluxo-caixa',
-  exigirToken,
+  exigirSessao,
   resolverCliente,
   async (req: RequisicaoComCliente, res: Response): Promise<void> => {
     const periodo = lerPeriodo(req, res);
@@ -61,7 +61,7 @@ rotasDashboard.get(
  */
 rotasDashboard.post(
   '/clientes/:cliente/cadastros/recarregar',
-  exigirToken,
+  exigirSessao,
   resolverCliente,
   (req: RequisicaoComCliente, res: Response): void => {
     invalidarCacheCadastros(req.cliente!.id);

@@ -5,15 +5,20 @@ dado pessoal. Migration nova sem linha aqui = finding (auditoria, invariante 5).
 
 Categorias de titular:
 
-- **Cliente** — a empresa contratante e seu representante (quem detém o `API_TOKEN`
-  e a credencial Omie).
+- **Cliente** — a empresa contratante e seu representante (quem contrata e
+  assina o adendo).
+- **Usuário** — pessoa física com login no dashboard (e-mail/senha),
+  funcionário ou representante do cliente. É por essa categoria que o produto
+  licencia (vende por quantidade de usuários ativos).
 - **Cliente/Fornecedor do controlador** — pessoa ou empresa cadastrada como
   cliente ou fornecedor na Omie do controlador, que aparece no DRE/oportunidades.
   Não tem relação com o operador.
 
 Legenda de base legal: ver `references/postura.md`.
 
-## `cliente` — única tabela do produto com dado pessoal
+## `cliente` e `usuario` — as duas tabelas do produto com dado pessoal
+
+### `cliente`
 
 | Coluna | Contém PII? | Categoria | Base | Retenção | Notas |
 |---|---|---|---|---|---|
@@ -21,6 +26,15 @@ Legenda de base legal: ver `references/postura.md`.
 | `omie_app_key_cif`, `omie_app_secret_cif` | segredo de acesso | Cliente | V | eliminar no encerramento (art. 15) | cifrado AES-256-GCM, chave em `CREDENCIAIS_CHAVE` fora do banco |
 | `ativo`, `criado_em`, `atualizado_em` | não | — | — | — | metadados |
 | `adendo_lgpd_versao`, `adendo_lgpd_aceito_em` | não (metadado contratual) | — | — | enquanto durar o contrato | registro do aceite do adendo de operador (art. 39); enquanto nulo o cliente não é ativado nem processado |
+| `limite_usuarios` | não | — | — | — | teto contratado de usuários ativos (licenciamento por assento) |
+
+### `usuario`
+
+| Coluna | Contém PII? | Categoria | Base | Retenção | Notas |
+|---|---|---|---|---|---|
+| `email` | sim | Usuário | V | enquanto durar o contrato daquele usuário | identificador de login; único no banco |
+| `senha_hash` | segredo de acesso | Usuário | V | idem | scrypt + sal aleatório (`lib/senha.ts`); a senha em texto puro nunca chega ao banco nem ao log |
+| `cliente_id`, `ativo`, `criado_em`, `atualizado_em` | não | — | — | — | metadados; `cliente_id` é o vínculo de escopo |
 
 Não há mais nenhuma outra tabela: sem Open Finance/conciliação, o produto não
 persiste transação, lançamento nem histórico de execução localmente.
@@ -33,7 +47,8 @@ persiste transação, lançamento nem histórico de execução localmente.
 | DRE / DRE mensal / fluxo de caixa / oportunidades — em memória e no JSON de resposta HTTP | sim | Cliente/Fornecedor do controlador | resposta vai para o dashboard atrás de `API_TOKEN`; buscado a cada consulta, **nunca persistido** |
 | Logs (`lib/logger.ts` + `lib/redacao.ts`) | **deve ser não** | — | redação liga por padrão: mascara CPF/CNPJ/e-mail/telefone/UUID e apaga campo de texto livre; campo de PII com nome fora do padrão ainda é finding (ver `references/auditoria.md` §1) |
 | Prévia estática (`npm run previa`) e demo (`npm run demo`) | não | — | dados fabricados em `scripts/`; nunca dado real (regra do CLAUDE.md) |
-| Backups do Neon | espelham `cliente` (credencial cifrada + aceite do adendo) | Cliente | conferir retenção, região e acesso do backup (backlog P2) |
+| Backups do Neon | espelham `cliente` e `usuario` (credencial cifrada, senha em hash) | Cliente / Usuário | conferir retenção, região e acesso do backup (backlog P2) |
+| Cookie de sessão (`omie_sessao`, navegador do usuário) | não | — | carrega só `usuarioId`, `clienteId` e validade, assinados por HMAC (`lib/sessao.ts`) — sem e-mail nem senha dentro |
 
 ## Transferência internacional
 

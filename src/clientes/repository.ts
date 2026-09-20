@@ -25,6 +25,7 @@ interface LinhaCliente {
   criado_em: Date;
   adendo_lgpd_versao: string | null;
   adendo_lgpd_aceito_em: Date | null;
+  limite_usuarios: number;
   omie_app_key_cif: string;
   omie_app_secret_cif: string;
 }
@@ -38,6 +39,7 @@ function paraResumo(linha: LinhaCliente): ClienteResumo {
     criadoEm: linha.criado_em,
     adendoLgpdVersao: linha.adendo_lgpd_versao,
     adendoLgpdAceitoEm: linha.adendo_lgpd_aceito_em,
+    limiteUsuarios: Number(linha.limite_usuarios),
   };
 }
 
@@ -67,6 +69,25 @@ export async function listarClientes(apenasAtivos = false): Promise<ClienteResum
 export async function buscarPorSlug(slug: string): Promise<ClienteResumo | null> {
   const { rows } = await pool.query<LinhaCliente>('SELECT * FROM cliente WHERE slug = $1', [slug]);
   return rows[0] ? paraResumo(rows[0]) : null;
+}
+
+export async function buscarPorId(clienteId: number): Promise<ClienteResumo | null> {
+  const { rows } = await pool.query<LinhaCliente>('SELECT * FROM cliente WHERE id = $1', [
+    clienteId,
+  ]);
+  return rows[0] ? paraResumo(rows[0]) : null;
+}
+
+/** Teto de usuarios (login) ativos que o contrato deste cliente permite. */
+export async function definirLimiteUsuarios(clienteId: number, limite: number): Promise<void> {
+  if (!Number.isInteger(limite) || limite < 1) {
+    throw new Error('O limite de usuarios precisa ser um inteiro maior ou igual a 1.');
+  }
+  const { rowCount } = await pool.query(
+    'UPDATE cliente SET limite_usuarios = $2, atualizado_em = now() WHERE id = $1',
+    [clienteId, limite],
+  );
+  if (rowCount === 0) throw new Error(`Cliente ${clienteId} nao encontrado.`);
 }
 
 /**

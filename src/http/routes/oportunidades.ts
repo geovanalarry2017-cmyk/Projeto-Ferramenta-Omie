@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import { apurarOportunidades } from '../../oportunidades/service.js';
 import {
-  exigirToken,
+  exigirSessao,
   lerPeriodo,
   resolverCliente,
   type RequisicaoComCliente,
@@ -18,7 +18,7 @@ export const rotasOportunidades = Router();
  */
 rotasOportunidades.get(
   '/clientes/:cliente/oportunidades',
-  exigirToken,
+  exigirSessao,
   resolverCliente,
   async (req: RequisicaoComCliente, res: Response): Promise<void> => {
     const periodo = lerPeriodo(req, res);

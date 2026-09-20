@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { pool } from '../db/pool.js';
+import { rotasAuth } from './routes/auth.js';
 import { rotasClientes } from './routes/clientes.js';
 import { rotasDashboard } from './routes/dashboard.js';
 import { rotasOportunidades } from './routes/oportunidades.js';
@@ -54,6 +55,7 @@ export function criarServidor() {
     }
   });
 
+  app.use(rotasAuth);
   app.use(rotasClientes);
   app.use(rotasDashboard);
   app.use(rotasOportunidades);

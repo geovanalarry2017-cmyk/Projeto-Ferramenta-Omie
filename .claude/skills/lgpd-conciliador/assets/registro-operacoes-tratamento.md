@@ -42,6 +42,18 @@ Responsável pelo registro: Geovana Ferraz — Última revisão: 2026-09-20.
 | Segurança | AES-256-GCM em repouso, chave em `CREDENCIAIS_CHAVE` fora do banco |
 | Retenção | eliminar no encerramento do contrato |
 
+### OP-3 — Login e licenciamento por usuário
+
+| Campo | Conteúdo |
+|---|---|
+| Finalidade | autenticar cada usuário no dashboard; controlar quantos usuários ativos o contrato do cliente permite (licenciamento por assento) |
+| Natureza | cadastro de e-mail/senha (hash), emissão de sessão a cada login |
+| Categorias de titular | usuários (funcionários/representantes do cliente) |
+| Categorias de dado | e-mail, hash de senha (scrypt + sal — nunca a senha em texto puro) |
+| Base legal | art. 7º, V (execução do contrato entre operador e controlador) |
+| Segurança | hash de senha (`lib/senha.ts`); cookie de sessão assinado por HMAC (`lib/sessao.ts`), HttpOnly, sem e-mail/senha dentro; bloqueio de 15 min após 5 tentativas erradas por e-mail |
+| Retenção | enquanto durar o contrato daquele usuário; eliminar/desativar no desligamento (`npm run usuarios -- desativar`) |
+
 ## Incidentes
 
 Registro de incidentes de segurança em «runbook-incidente / planilha de

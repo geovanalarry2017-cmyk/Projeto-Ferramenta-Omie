@@ -15,6 +15,8 @@ export interface ClienteResumo {
   adendoLgpdVersao: string | null;
   /** Quando o aceite do adendo foi registrado, ou null enquanto pendente. */
   adendoLgpdAceitoEm: Date | null;
+  /** Quantos usuarios (login) ativos o contrato deste cliente permite. */
+  limiteUsuarios: number;
 }
 
 /**

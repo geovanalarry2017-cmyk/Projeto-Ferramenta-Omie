@@ -69,9 +69,10 @@ host que não está em `references/suboperadores.md`:
 Migration em `src/db/migrations/` que adiciona coluna capaz de conter dado
 pessoal (texto livre, nome, documento, contato, identificador de pessoa) exige,
 na mesma PR, uma linha em `references/mapa-de-dados-pessoais.md` com categoria de
-titular, base legal e retenção. Sem isso, não mergeia. (Hoje `cliente` é a
-única tabela com dado pessoal — qualquer tabela nova já é, por si, um evento
-grande o bastante para revisar toda a skill, não só esta linha.)
+titular, base legal e retenção. Sem isso, não mergeia. (Hoje `cliente` e
+`usuario` são as únicas tabelas com dado pessoal — qualquer tabela nova além
+dessas já é, por si, um evento grande o bastante para revisar toda a skill,
+não só esta linha.)
 
 ## 6. Minimização na resposta — art. 6º, III
 
@@ -106,9 +107,10 @@ Quando o CLI ganhar `excluir` / `exportar` (backlog P1):
   boot em `NODE_ENV=production` se a `DATABASE_URL` não tiver
   `sslmode=require|verify-ca|verify-full`. Finding: qualquer mudança que
   afrouxe essa regra ou adicione um caminho de conexão que a contorne.
-- Nenhuma rota de dado sem `exigirToken`. Rota nova em `http/routes/` sem o
-  middleware é finding. (Nota de dívida: `API_TOKEN` é único e compartilhado —
-  ver backlog P2.)
+- Nenhuma rota de dado do dashboard sem `exigirSessao`. Rota nova em
+  `http/routes/` sem o middleware é finding. `exigirToken` (`API_TOKEN` único e
+  compartilhado) é só para automação/scripts internos — não deve proteger rota
+  nenhuma que o dashboard consome.
 
 ## 10. Erro não vaza PII — art. 46
 
@@ -133,10 +135,26 @@ serviço de DRE/oportunidades) sem passar por um desses gates, ou mudança que
 crie cliente já ativo. Recadastro de credenciais no onboarding pode rodar antes
 do aceite — não processa dado de titular.
 
+## 12. Senha e sessão de usuário — art. 46; regra do CLAUDE.md
+
+- Senha só é gravada ou conferida via `src/lib/senha.ts` (`hashSenha` /
+  `verificarSenha`, scrypt + sal). Um `INSERT`/`UPDATE` em `usuario.senha_hash`
+  fora dessas funções, ou uma comparação de senha com `===`/`bcrypt` direto
+  sem passar por elas, é finding.
+- Senha em texto puro nunca vai a log, resposta HTTP, mensagem de erro nem
+  `console.log` do CLI além da impressão única no terminal no momento da
+  criação (`cli/usuarios.ts`).
+- `resolverCliente` (middleware) recusa (403) quando `req.sessao.clienteId`
+  não bate com o cliente resolvido pelo slug da URL — sem isso, um usuário
+  logado poderia trocar o slug e ver dado de outro cliente. Mudança nesse
+  middleware que remova essa checagem é finding.
+- `SESSAO_CHAVE` nunca em log, erro, teste ou fixture — mesma regra de
+  `CREDENCIAIS_CHAVE` (invariante 3), chave diferente.
+
 ---
 
 ## Saída da auditoria
 
 Reportar como o `/code-review` faz: arquivo:linha, invariante violada, artigo,
-cenário concreto de vazamento/violação. Sem finding: dizer que os 11 invariantes
+cenário concreto de vazamento/violação. Sem finding: dizer que os 12 invariantes
 passaram no diff revisado.

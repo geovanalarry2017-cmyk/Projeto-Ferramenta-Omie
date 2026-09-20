@@ -54,9 +54,10 @@ Pontos quentes:
 |---|---|
 | Respostas de DRE / DRE mensal / fluxo de caixa / oportunidades | nomes e documentos (CPF/CNPJ) de clientes e fornecedores do cliente, vindos da Omie — buscado a cada consulta, **nunca gravado no Postgres** |
 | `cliente.omie_app_key_cif` / `omie_app_secret_cif` | credencial de acesso à Omie do cliente — cifrada AES-256-GCM |
+| `usuario.email` / `senha_hash` | login de cada pessoa que acessa o dashboard — senha em hash (scrypt + sal), nunca em texto puro |
 
-`cliente` é hoje a **única tabela do produto com dado pessoal** — não há mais
-nenhuma tabela de transação ou histórico local.
+`cliente` e `usuario` são hoje as **únicas duas tabelas do produto com dado
+pessoal** — não há mais nenhuma tabela de transação ou histórico local.
 
 Suboperadores (recebem dado pessoal): **Omie, Neon, Render**. Lista com o que
 cada um recebe e onde fica em [`references/suboperadores.md`](references/suboperadores.md).
@@ -73,9 +74,11 @@ finding:
   `src/lib/redacao.ts` (sufixos de texto livre + padrões CPF/CNPJ/e-mail/
   telefone/UUID), ou nome de pessoa montado na string da mensagem;
 - rota nova de dado (`/dre`, `/dre-mensal`, `/fluxo-caixa`, `/oportunidades`…)
-  sem passar por `resolverCliente` (middleware);
+  sem passar por `exigirSessao` + `resolverCliente` (middleware);
 - gravação em coluna de credencial sem passar por `lib/cripto.ts`, ou log do
   valor decifrado;
+- senha de usuário gravada ou comparada fora de `lib/senha.ts` (hash direto,
+  sem `hashSenha`/`verificarSenha`), ou senha em texto puro em log/resposta;
 - `fetch` / SDK novo para host fora de `references/suboperadores.md`;
 - migration que adiciona coluna capaz de conter PII sem entrada no mapa de dados;
 - campo lido da Omie e devolvido ao dashboard sem uso em DRE/oportunidades

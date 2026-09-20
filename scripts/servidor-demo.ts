@@ -57,11 +57,13 @@ function lerPeriodo(req: Request, res: Response): { de: DataISO; ate: DataISO } 
 }
 
 /**
- * Deixa evidente na propria tela que o numero e inventado, e preenche o campo
- * de token (o demo aceita qualquer valor) para o dashboard carregar sozinho.
+ * Deixa evidente na propria tela que o numero e inventado.
  *
  * A injecao acontece so aqui, na resposta: `public/index.html` continua
  * intocado, sem nenhum vestigio de modo demo no arquivo que vai para producao.
+ * Este servidor nao exige login (nenhuma rota checa sessao) — o proprio
+ * script da pagina, ao achar `/clientes` respondendo, ja esconde a tela de
+ * login sozinho.
  */
 function comAvisoDeDemo(html: string): string {
   const faixa = `
@@ -71,17 +73,7 @@ function comAvisoDeDemo(html: string): string {
   Nenhuma conta Omie ou banco foi consultado.
 </div>`;
 
-  return html
-    .replace('<div class="container">', `<div class="container">${faixa}`)
-    .replace(
-      '</body>',
-      `<script>
-         // O demo aceita qualquer token; preencher evita ter que digitar algo
-         // que aqui nao protege nada.
-         document.getElementById('token').value = 'demo';
-       </script>
-       </body>`,
-    );
+  return html.replace('<div class="container">', `<div class="container">${faixa}`);
 }
 
 const app = express();

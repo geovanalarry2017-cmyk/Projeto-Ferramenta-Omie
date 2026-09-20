@@ -37,6 +37,14 @@ export const envSchema = z
       'Perder esta chave torna as credenciais guardadas irrecuperaveis.',
   ),
 
+  // Assina o cookie de sessao do login por usuario (src/lib/sessao.ts).
+  // Diferente da CREDENCIAIS_CHAVE de proposito: nao cifra nada guardado no
+  // banco, so autentica o cookie — trocar esta aqui apenas desloga todo mundo.
+  SESSAO_CHAVE: obrigatoria(
+    'Chave que assina o cookie de sessao dos usuarios. Gere com: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))".',
+  ),
+
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   API_TOKEN: obrigatoria('Invente um valor secreto; protege o disparo via HTTP.'),

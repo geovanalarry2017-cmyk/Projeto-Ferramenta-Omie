@@ -196,6 +196,24 @@
   .erro { border-color: var(--negativo); background: color-mix(in srgb, var(--negativo) 12%, transparent); }
   .oculto { display: none; }
 
+  /* ---------- Tela de login ---------- */
+
+  .tela-login {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--fundo);
+  }
+  .cartao-login {
+    width: min(340px, calc(100vw - 32px));
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 12px; padding: 28px 26px;
+  }
+  .cartao-login h1 { margin: 0 0 4px; font-size: 18px; }
+  .cartao-login .sub { margin: 0 0 20px; font-size: 13px; color: var(--suave); }
+  .cartao-login form { display: flex; flex-direction: column; gap: 14px; }
+  .cartao-login button { width: 100%; padding: 9px 10px; }
+  .cartao-login .aviso.erro { margin: 0; padding: 10px 12px; font-size: 13px; }
+
   /*
     O aviso de "sem dados" é uma camada sobre o canvas, nunca um innerHTML no
     lugar dele: destruir o canvas faz o gráfico não voltar mais quando o período
@@ -302,6 +320,24 @@
 </style>
 </head>
 <body>
+<div id="tela-login" class="tela-login">
+  <div class="cartao-login">
+    <h1>Entrar</h1>
+    <p class="sub">Acesso por usuário — cada login enxerga só os dados do próprio cliente.</p>
+    <div id="erro-login" class="aviso erro oculto"></div>
+    <form id="form-login">
+      <div class="campo">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="login-senha">Senha</label>
+        <input type="password" id="login-senha" autocomplete="current-password" required>
+      </div>
+      <button id="login-enviar" type="submit">Entrar</button>
+    </form>
+  </div>
+</div>
 <div class="app">
 <aside class="lateral">
   <nav id="abas">
@@ -319,7 +355,8 @@
   <div class="rodape">
     Tratamos dados como <strong>operador</strong>, em nome de cada cliente.<br>
     <a href="politica-de-privacidade.html">Política de Privacidade</a><br>
-    Encarregado (DPO): Geovana Ferraz — geovana.larry2017@gmail.com
+    Encarregado (DPO): Geovana Ferraz — geovana.larry2017@gmail.com<br>
+    <span id="rodape-usuario"></span> <a href="#" id="sair">Sair</a>
   </div>
 </aside>
 
@@ -352,10 +389,6 @@
         <option value="caixa">Caixa (o que foi pago)</option>
         <option value="competencia">Competência (o que foi faturado)</option>
       </select>
-    </div>
-    <div class="campo">
-      <label for="token">Token da API</label>
-      <input type="password" id="token" placeholder="X-API-Token" size="18">
     </div>
     <button id="carregar">Carregar</button>
   </div>
@@ -432,10 +465,6 @@ function moedaCurta(centavos) {
   if (abs >= 1_000) return `${sinal}R$ ${n(abs / 1_000, 1)} mil`;
   return `${sinal}R$ ${n(abs, 0)}`;
 }
-
-// O token fica só neste navegador; nunca é enviado a lugar nenhum além da
-// própria API. Evita redigitar a cada recarga.
-try { $('token').value = localStorage.getItem('omie.token') || ''; } catch {}
 
 // ---------- Tema ----------
 
@@ -545,7 +574,7 @@ function trocarAba(id, { buscar = true } = {}) {
   limparErro();
   if (history.replaceState) history.replaceState(null, '', `#${id}`);
 
-  if (buscar && !ABAS[id].carregado() && $('token').value) void ABAS[id].carregar();
+  if (buscar && !ABAS[id].carregado()) void ABAS[id].carregar();
 }
 
 for (const botao of document.querySelectorAll('.aba')) {
@@ -562,8 +591,14 @@ function periodoPadrao() {
 }
 periodoPadrao();
 
-async function api(caminho) {
-  const resposta = await fetch(caminho, { headers: { 'X-API-Token': $('token').value } });
+async function api(caminho, opcoes) {
+  // Same-origin: o navegador já manda o cookie de sessão sozinho, sem header
+  // nenhum para montar aqui.
+  const resposta = await fetch(caminho, opcoes);
+  if (resposta.status === 401) {
+    mostrarTelaLogin();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
   const corpo = await resposta.json().catch(() => ({}));
   if (!resposta.ok) throw new Error(corpo.erro || `Erro ${resposta.status}`);
   return corpo;
@@ -581,6 +616,7 @@ async function carregarClientes() {
     $('cliente').innerHTML = clientes
       .map((c) => `<option value="${c.slug}">${c.nome}</option>`)
       .join('');
+    $('rodape-usuario').textContent = clientes[0] ? `Cliente: ${clientes[0].nome} ·` : '';
     return clientes.length > 0;
   } catch (e) {
     mostrarErro(`Não foi possível listar os clientes: ${e.message}`);
@@ -1326,8 +1362,6 @@ async function carregarOportunidades() {
   if (!slug) return mostrarErro('Nenhum cliente selecionado.');
   if (!de || !ate) return mostrarErro('Informe o período.');
 
-  try { localStorage.setItem('omie.token', $('token').value); } catch {}
-
   limparErro();
   $('carregar').disabled = true;
   $('carregar').textContent = 'Analisando...';
@@ -1508,8 +1542,6 @@ async function carregarFinanceiro() {
   if (!slug) return mostrarErro('Nenhum cliente selecionado.');
   if (!de || !ate) return mostrarErro('Informe o período.');
 
-  try { localStorage.setItem('omie.token', $('token').value); } catch {}
-
   limparErro();
   $('carregar').disabled = true;
   $('carregar').textContent = 'Carregando...';
@@ -1630,11 +1662,68 @@ $('regime').addEventListener('change', () => {
 });
 
 // A aba sai do hash da URL; sem hash, abre no financeiro. `buscar: false` para
-// não disparar a busca antes de saber se existe cliente e token.
+// não disparar a busca antes de confirmar a sessão.
 trocarAba(location.hash.slice(1) || 'financeiro', { buscar: false });
 
+// ---------- Login / sessão ----------
+//
+// A tela de login começa visível (sem classe "oculto" no HTML) — assume-se
+// deslogado até provar o contrário. `api()` já chama isto sozinho sempre que
+// uma resposta vem 401 (sessão nunca existiu, ou expirou no meio do uso).
+
+function mostrarTelaLogin() {
+  $('tela-login').classList.remove('oculto');
+}
+function esconderTelaLogin() {
+  $('tela-login').classList.add('oculto');
+  $('erro-login').classList.add('oculto');
+}
+
+$('form-login').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  $('erro-login').classList.add('oculto');
+  $('login-enviar').disabled = true;
+  $('login-enviar').textContent = 'Entrando...';
+
+  try {
+    const resposta = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('login-email').value, senha: $('login-senha').value }),
+    });
+    const corpo = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(corpo.erro || `Erro ${resposta.status}`);
+
+    $('login-senha').value = '';
+    esconderTelaLogin();
+    const temCliente = await carregarClientes();
+    if (temCliente) void carregar();
+  } catch (e) {
+    $('erro-login').textContent = e.message;
+    $('erro-login').classList.remove('oculto');
+  } finally {
+    $('login-enviar').disabled = false;
+    $('login-enviar').textContent = 'Entrar';
+  }
+});
+
+$('sair').addEventListener('click', async (ev) => {
+  ev.preventDefault();
+  try { await fetch('/logout', { method: 'POST' }); } catch {}
+  esquecerTudo();
+  $('rodape-usuario').textContent = '';
+  $('login-email').value = '';
+  $('login-senha').value = '';
+  mostrarTelaLogin();
+});
+
+// Também serve de checagem de sessão: se o cookie ainda for válido (visita
+// recarregada, aba nova), pula a tela de login direto para o dashboard.
 carregarClientes().then((temCliente) => {
-  if (temCliente && $('token').value) void carregar();
+  if (temCliente) {
+    esconderTelaLogin();
+    void carregar();
+  }
 });
 </script>
 </body>

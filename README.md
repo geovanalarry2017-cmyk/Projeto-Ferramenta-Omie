@@ -6,9 +6,11 @@ já está cadastrado na Omie. Vendas, compras, estoque e marketplaces continuam
 na Omie e não são tocados aqui. Não escreve nada de volta — só lê, apura e
 reporta.
 
-**É um produto multi-cliente.** Cada cliente tem sua própria conta Omie e seus
-próprios dados, isolados dos demais. Nada de credencial de cliente em variável
-de ambiente: ela vive **cifrada no banco**.
+**É um produto multi-cliente, vendido por usuário.** Cada cliente (empresa)
+tem sua própria conta Omie, isolada das demais, e pode ter vários usuários —
+cada um com login próprio (e-mail/senha) — vendo os mesmos dados. É a
+quantidade de usuários ativos que licencia, não o cliente. Nada de credencial
+de cliente em variável de ambiente: ela vive **cifrada no banco**.
 
 O briefing completo do projeto está em
 [`projeto-omie-integracoes.md`](./projeto-omie-integracoes.md) — esta fase
@@ -19,13 +21,15 @@ digital vêm depois (ver "Ainda não feito").
 
 ```bash
 npm install
-cp .env.example .env    # DATABASE_URL + CREDENCIAIS_CHAVE
+cp .env.example .env    # DATABASE_URL + CREDENCIAIS_CHAVE + SESSAO_CHAVE
 npm run db:migrate
 ```
 
 > ⚠️ **`CREDENCIAIS_CHAVE` cifra as credenciais de todos os clientes.**
 > Perdê-la torna o que está guardado irrecuperável e obriga a recadastrar
 > todo mundo. Guarde uma cópia num cofre de senhas antes do primeiro cliente real.
+> `SESSAO_CHAVE` é outra chave, para o cookie de login — perdê-la só desloga
+> todo mundo, nenhuma credencial se perde.
 
 ### 1. Cadastre um cliente
 
@@ -47,15 +51,27 @@ npm run clientes -- aceite --cliente acme --versao v1
 Sem isso, `ativar` recusa e as rotas de dados respondem `403`. A data do aceite é
 gravada na hora; `--versao` é a versão do documento assinado.
 
-### 2. Suba o servidor e veja os dados
+### 2. Cadastre um usuário (login)
+
+```bash
+npm run usuarios -- criar --cliente acme --email ana@acme.com
+```
+
+Pede a senha inicial no prompt (Enter gera uma aleatória, impressa uma única
+vez). É esse e-mail/senha que a pessoa usa para entrar no dashboard — o
+cliente pode ter vários usuários, até o limite contratado
+(`npm run usuarios -- limite --cliente acme --quantidade N`, padrão 1).
+
+### 3. Suba o servidor e veja os dados
 
 ```bash
 npm run dev
 ```
 
-Acesse `/` — o dashboard já busca DRE, fluxo de caixa e mapa de oportunidades
-direto na conta Omie do cliente cadastrado. Sem conta Omie de teste com dado à
-mão, `npm run demo` sobe a mesma tela com números fictícios (ver "Dashboard de
+Acesse `/` e faça login com o e-mail/senha do usuário cadastrado — o dashboard
+busca DRE, fluxo de caixa e mapa de oportunidades direto na conta Omie do
+cliente daquele usuário. Sem conta Omie de teste com dado à mão, `npm run demo`
+sobe a mesma tela com números fictícios e sem exigir login (ver "Dashboard de
 DRE" mais abaixo).
 
 ## Comandos
@@ -66,7 +82,11 @@ DRE" mais abaixo).
 | `npm run clientes -- criar --slug X --nome "Y"` | Cadastra cliente (inativo) e pede a credencial Omie. |
 | `npm run clientes -- aceite --cliente X --versao V` | Registra o aceite do adendo LGPD e ativa o cliente. |
 | `npm run clientes -- ativar\|desativar --cliente X` | Liga/desliga o cliente na API. |
-| `npm run demo` | Dashboard com dados fictícios, sem banco nem Omie. |
+| `npm run usuarios -- listar --cliente X` | Lista os usuários (login) do cliente. |
+| `npm run usuarios -- criar --cliente X --email E` | Cria um usuário; pede a senha (ou gera uma). |
+| `npm run usuarios -- limite --cliente X --quantidade N` | Define quantos usuários ativos o cliente pode ter. |
+| `npm run usuarios -- ativar\|desativar --email E` | Liga/desliga o login desse usuário. |
+| `npm run demo` | Dashboard com dados fictícios, sem banco nem Omie nem login. |
 | `npm run dev` | Servidor com reload. |
 | `npm run build` / `npm start` | Compila e roda a versão de produção. |
 | `npm test` | Testes offline, sem credencial nem banco. |
@@ -75,20 +95,26 @@ DRE" mais abaixo).
 
 ## API
 
-Tudo exceto `/health` exige o header `X-API-Token`, e toda rota de dados é
-escopada por cliente.
+Toda rota de dado exige um usuário logado — cookie de sessão (`omie_sessao`),
+obtido em `POST /login` — e é escopada pelo cliente daquele usuário. Só
+`/health`, `/login` e `/logout` ficam fora disso. `X-API-Token` continua
+existindo à parte, para automação/scripts internos (não é o que o dashboard usa).
 
 | Rota | Descrição |
 |---|---|
 | `GET /health` | Healthcheck: testa o banco (`SELECT 1`). O Render usa como health check do deploy; também serve de alvo para um ping de monitoração externo. |
-| `GET /clientes` | Lista os clientes (sem credenciais). |
+| `POST /login` | `{ email, senha }` → autentica e devolve o cookie de sessão (7 dias). Bloqueia por 15 min após 5 tentativas erradas com o mesmo e-mail. |
+| `POST /logout` | Limpa o cookie de sessão. |
+| `GET /clientes` | O cliente do usuário logado (hoje sempre um item). |
 | `GET /clientes/:cliente/dre` | DRE do período. `?de=&ate=&regime=caixa\|competencia`. |
 | `GET /clientes/:cliente/dre-mensal` | O mesmo DRE em matriz, uma coluna por mês (máx. 36). Mesmos parâmetros. |
 | `GET /clientes/:cliente/oportunidades` | Mapa de oportunidades do período. `?de=&ate=`. Sempre regime de caixa. |
 | `GET /clientes/:cliente/fluxo-caixa` | Entradas, saídas e saldo acumulado por dia. `?de=&ate=`. |
 | `POST /clientes/:cliente/cadastros/recarregar` | Descarta o cache do plano de contas (10 min). |
 
-O dashboard em si é servido na raiz (`/`) pelo mesmo processo.
+`:cliente` na URL precisa ser o mesmo cliente do usuário logado — a sessão
+barra (`403`) quem tentar trocar o slug para ver dado de outro cliente. O
+dashboard em si é servido na raiz (`/`) pelo mesmo processo.
 
 ## Dashboard de DRE
 
@@ -238,21 +264,29 @@ Custos` fecha somando, sem regra especial em lugar nenhum.
   comparar `Date` faria lançamento da meia-noite cair no dia errado.
 - **Chamadas à Omie são serializadas** com intervalo mínimo, porque a API limita
   taxa por app e devolve o estouro como erro genérico 5xx.
+- **Login por usuário, licença por assento.** Cada cliente pode ter vários
+  usuários (e-mail/senha), até um limite contratado (`cliente.limite_usuarios`)
+  — é isso que vira "vender por usuário" em vez de por cliente. Senha em hash
+  (scrypt + sal, `lib/senha.ts`); sessão num cookie HttpOnly assinado por HMAC
+  (`lib/sessao.ts`), sem dependência nova (`node:crypto`, igual a `lib/cripto.ts`).
 
 ## Estrutura
 
 ```
 src/
   config/env.ts        valida o .env no boot e mata o processo se faltar algo
-  lib/                 dinheiro, datas, HTTP com retry, cripto, log, adendo LGPD
+  lib/                 dinheiro, datas, HTTP com retry, cripto, senha, sessao, log, adendo LGPD
   clientes/            clientes do produto e sua credencial Omie cifrada
+  usuarios/            usuarios (login) de cada cliente e o limite de assentos
   omie/                cliente (envelope call/app_key/app_secret) e finanças
   dre/                 apuração de DRE, DRE mensal e fluxo de caixa
-  http/                Express, rotas escopadas por cliente
+  http/                Express, rotas escopadas por cliente, cookie de sessão
+    routes/auth.ts     POST /login e /logout
   oportunidades/       o que merece atenção nos números, e o que fazer
     analisar.ts        núcleo puro; os limiares são as constantes do topo
   db/                  pool e migrations
   cli/clientes.ts      cadastro de clientes e aceite do adendo LGPD
+  cli/usuarios.ts      cadastro de usuarios e limite de assentos
 
 scripts/
   dados-fake.ts        dados fictícios no formato da Omie (só demonstração)
@@ -276,10 +310,10 @@ em tempos evita o cold start, se isso incomodar. Trocar para `plan: starter` no
   `DATABASE_URL` precisa terminar em **`?sslmode=require`** — com
   `NODE_ENV=production` o boot recusa subir sem TLS no banco
   ([`src/config/env.ts`](./src/config/env.ts)).
-- **Segredos:** `DATABASE_URL`, `CREDENCIAIS_CHAVE` e `API_TOKEN` entram como
-  `sync: false` — preenchidos uma vez no painel do Render, nunca no arquivo. Os
-  de produção são **novos**, gerados na hora; não se reaproveita os de
-  desenvolvimento.
+- **Segredos:** `DATABASE_URL`, `CREDENCIAIS_CHAVE`, `SESSAO_CHAVE` e
+  `API_TOKEN` entram como `sync: false` — preenchidos uma vez no painel do
+  Render, nunca no arquivo. Os de produção são **novos**, gerados na hora; não
+  se reaproveita os de desenvolvimento.
 - **Migrations:** rodam no início do `startCommand` (`node dist/db/migrate.js
   && node dist/index.js`) — o plano Free não suporta `preDeployCommand`. São
   idempotentes (`schema_migrations`), então rodar em todo start é seguro.

@@ -73,11 +73,11 @@ implementação — depende de você / de quem cuida do contrato.
 
 ## P2 — endurecimento
 
-- [ ] **Autenticação real no dashboard/API.** Hoje: `API_TOKEN` único,
-  compartilhado por todos os clientes, sem identidade individual e sem trilha de
-  acesso (`src/http/middleware.ts` — o próprio comentário diz "não substitui
-  autenticação de verdade"). Avaliar token por cliente + log de acesso
-  (data, cliente, rota) para rastreabilidade (art. 37, 46).
+- [x] **Autenticação real no dashboard/API.** Login por usuário (e-mail/senha,
+  hash scrypt) substituiu o `API_TOKEN` único nas rotas que o dashboard usa —
+  ver "Feito" abaixo. `API_TOKEN` continua existindo à parte, só para
+  automação/scripts internos. Ainda falta: trilha de acesso (log de quem
+  acessou o quê, quando) — deixar como item novo se vier a fazer falta.
 - [ ] **Minimização na resposta da API.** Revisar o que `dre/montar.ts` e
   `oportunidades/analisar.ts` devolvem a partir do que `omie/financas.ts` e
   `omie/cadastros.ts` buscam; cortar campo que a tela não usa (art. 6º, III).
@@ -124,3 +124,16 @@ implementação — depende de você / de quem cuida do contrato.
   `docs/processo-assinatura-adendo.md`: envio pelo DocuSign (manual, sem
   integração de API), acompanhamento, e o comando `clientes -- aceite` depois
   de assinado. — 2026-09-20
+- **Login por usuário e licenciamento por assento.** Nova tabela `usuario`
+  (e-mail + hash de senha, `cliente_id`) e `cliente.limite_usuarios` (migration
+  `005_usuarios.sql`). `POST /login`/`POST /logout` com cookie de sessão
+  (`lib/sessao.ts`, HMAC, sem dependência nova); `exigirSessao` substituiu
+  `exigirToken` nas rotas do dashboard (`/clientes`, `/dre`, `/dre-mensal`,
+  `/fluxo-caixa`, `/oportunidades`, `/cadastros/recarregar`); `resolverCliente`
+  passou a recusar (403) sessão de um cliente tentando ler dado de outro.
+  Bloqueio de força bruta no login (5 tentativas / 15 min por e-mail). CLI
+  `npm run usuarios -- listar\|criar\|limite\|ativar\|desativar`. Dashboard
+  ganhou tela de login; o antigo campo "Token da API" saiu da tela. Efeito em
+  LGPD: `usuario` passou a ser a segunda tabela do produto com dado pessoal —
+  mapa de dados, ROPA (OP-3) e auditoria (invariante 12) atualizados; resolve
+  o item de "autenticação real" do P2 acima. — 2026-09-20

@@ -9,14 +9,16 @@ beforeAll(async () => {
   // Preenche o minimo antes do import (sem sobrepor um .env real, que tambem serve).
   process.env.DATABASE_URL ||= 'postgresql://u:p@localhost/db?sslmode=require';
   process.env.CREDENCIAIS_CHAVE ||= 'a'.repeat(64);
+  process.env.SESSAO_CHAVE ||= 'b'.repeat(64);
   process.env.API_TOKEN ||= 'token-de-teste';
   ({ envSchema } = await import('../src/config/env.js'));
 });
 
-/** Minimo para o schema passar: so as tres obrigatorias. */
+/** Minimo para o schema passar: so as quatro obrigatorias. */
 const base = {
   DATABASE_URL: 'postgresql://u:p@localhost/db',
   CREDENCIAIS_CHAVE: 'a'.repeat(64),
+  SESSAO_CHAVE: 'b'.repeat(64),
   API_TOKEN: 'segredo-de-teste',
 };
 
