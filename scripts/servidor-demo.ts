@@ -3,10 +3,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import type { DataISO } from '../src/lib/dates.js';
-import { montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
+import { mesesNoPeriodo, montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
 import { analisarOportunidades } from '../src/oportunidades/analisar.js';
 import type { Regime } from '../src/dre/types.js';
 import { montarOrcamento } from '../src/orcamento/montar.js';
+import type { OrcamentoDoMes } from '../src/orcamento/types.js';
 import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake, listarOrcamentoFake } from './dados-fake.js';
 
 /**
@@ -137,15 +138,15 @@ app.get('/clientes/:cliente/oportunidades', (req: Request, res: Response) => {
 });
 
 app.get('/clientes/:cliente/orcamento', (req: Request, res: Response) => {
-  const ano = Number(req.query.ano);
-  const mes = Number(req.query.mes);
+  const periodo = lerPeriodo(req, res);
+  if (!periodo) return;
 
-  if (!Number.isInteger(ano) || !Number.isInteger(mes) || mes < 1 || mes > 12) {
-    res.status(400).json({ erro: 'Informe ano (AAAA) e mes (1 a 12) validos.' });
-    return;
-  }
+  const porMes: OrcamentoDoMes[] = mesesNoPeriodo(periodo.de, periodo.ate).map((mes) => {
+    const [ano, mesNum] = mes.chave.split('-').map(Number) as [number, number];
+    return { chave: mes.chave, categorias: listarOrcamentoFake(ano, mesNum) };
+  });
 
-  res.json(montarOrcamento(ano, mes, listarOrcamentoFake(ano, mes)));
+  res.json(montarOrcamento(periodo.de, periodo.ate, porMes));
 });
 
 app.use(express.static(PASTA_PUBLICA));

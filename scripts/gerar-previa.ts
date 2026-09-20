@@ -2,9 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DataISO } from '../src/lib/dates.js';
-import { montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
+import { mesesNoPeriodo, montarDRE, montarDREMensal, montarFluxoDeCaixa } from '../src/dre/montar.js';
 import { analisarOportunidades } from '../src/oportunidades/analisar.js';
 import { montarOrcamento } from '../src/orcamento/montar.js';
+import type { OrcamentoDoMes } from '../src/orcamento/types.js';
 import { CATEGORIAS, CONTAS_DRE, listarMovimentosFake, listarOrcamentoFake } from './dados-fake.js';
 
 /**
@@ -93,14 +94,13 @@ function apurar(de: DataISO, ate: DataISO) {
   const dreCaixa = montarDRE(CONTAS_DRE, CATEGORIAS, movimentosCaixa, caixa);
   const mensalCaixa = montarDREMensal(CONTAS_DRE, CATEGORIAS, movimentosCaixa, caixa);
 
-  // A pagina pede o orcamento do mes do fim do periodo (mesma regra do
-  // carregarOrcamento em public/index.html) — a Omie so entrega mes fechado.
-  const [anoOrcamento, mesOrcamento] = ate.split('-').map(Number) as [number, number];
-  const orcamento = montarOrcamento(
-    anoOrcamento,
-    mesOrcamento,
-    listarOrcamentoFake(anoOrcamento, mesOrcamento),
-  );
+  // A Omie so entrega orcamento por mes fechado, nunca por periodo livre —
+  // um mes por vez, somados em montarOrcamento (mesma regra do service real).
+  const porMesOrcamento: OrcamentoDoMes[] = mesesNoPeriodo(de, ate).map((mes) => {
+    const [ano, mesNum] = mes.chave.split('-').map(Number) as [number, number];
+    return { chave: mes.chave, categorias: listarOrcamentoFake(ano, mesNum) };
+  });
+  const orcamento = montarOrcamento(de, ate, porMesOrcamento);
 
   return {
     periodo: { de, ate },

@@ -1,43 +1,76 @@
+import type { DataISO } from '../lib/dates.js';
 import { paraCentavos } from '../lib/money.js';
 import { decodificarEntidades } from '../lib/texto.js';
-import type { OrcamentoCategoria } from '../omie/types.js';
-import type { LinhaOrcamento, ResultadoOrcamento } from './types.js';
+import type { LinhaOrcamento, MesOrcamento, OrcamentoDoMes, ResultadoOrcamento } from './types.js';
 
 /**
- * Monta o previsto x realizado do mês a partir do que a Omie devolveu.
+ * Monta o previsto x realizado do período a partir do que a Omie devolveu,
+ * mês por mês (`porMes` já vem um item por mês do período — ver
+ * `dre/montar.ts#mesesNoPeriodo`, reaproveitado no service).
  *
- * Puro: não busca nada, só calcula sobre o que já veio da Omie — mesma regra
- * de `dre/montar.ts`.
+ * Puro: não busca nada, só soma o que já veio da Omie — mesma regra de
+ * `dre/montar.ts`.
  *
- * De propósito **não** classifica desvio como bom/ruim (sem cor, sem "alerta"):
- * uma categoria de despesa estourar o previsto é preocupante, mas a mesma
- * coisa numa categoria de receita é ótima notícia, e o orçamento de caixa da
- * Omie não diz aqui qual é qual — diferente da categoria usada no DRE, que
- * tem o vínculo `codigo_dre` para isso. Mostrar cor sem saber o lado seria
- * inventar um julgamento que os dados não sustentam.
+ * De propósito **não** classifica desvio como bom/ruim (sem cor, sem
+ * "alerta"): uma categoria de despesa estourar o previsto é preocupante, mas
+ * a mesma coisa numa categoria de receita é ótima notícia, e o orçamento de
+ * caixa da Omie não diz aqui qual é qual — diferente da categoria usada no
+ * DRE, que tem o vínculo `codigo_dre` para isso. Mostrar cor sem saber o lado
+ * seria inventar um julgamento que os dados não sustentam.
  */
 export function montarOrcamento(
-  ano: number,
-  mes: number,
-  categorias: OrcamentoCategoria[],
+  de: DataISO,
+  ate: DataISO,
+  porMes: OrcamentoDoMes[],
 ): ResultadoOrcamento {
-  const linhas: LinhaOrcamento[] = categorias
-    .filter((c): c is OrcamentoCategoria & { cCodCateg: string } => Boolean(c.cCodCateg))
-    .map((c) => {
+  const acumuladoPorCategoria = new Map<
+    string,
+    { descricao: string; previstoCentavos: number; realizadoCentavos: number }
+  >();
+  const meses: MesOrcamento[] = [];
+
+  for (const { chave, categorias } of porMes) {
+    let previstoMesCentavos = 0;
+    let realizadoMesCentavos = 0;
+
+    for (const c of categorias) {
+      if (!c.cCodCateg) continue;
+
       const previstoCentavos = paraCentavos(c.nValorPrevisto);
       const realizadoCentavos = paraCentavos(c.nValorRealilzado ?? c.nValorRealizado);
-      const desvioCentavos = realizadoCentavos - previstoCentavos;
+      previstoMesCentavos += previstoCentavos;
+      realizadoMesCentavos += realizadoCentavos;
 
-      return {
-        codigo: c.cCodCateg,
+      const atual = acumuladoPorCategoria.get(c.cCodCateg) ?? {
         descricao: decodificarEntidades(c.cDesCateg) || c.cCodCateg,
-        previstoCentavos,
-        realizadoCentavos,
+        previstoCentavos: 0,
+        realizadoCentavos: 0,
+      };
+      atual.previstoCentavos += previstoCentavos;
+      atual.realizadoCentavos += realizadoCentavos;
+      acumuladoPorCategoria.set(c.cCodCateg, atual);
+    }
+
+    meses.push({
+      chave,
+      previstoCentavos: previstoMesCentavos,
+      realizadoCentavos: realizadoMesCentavos,
+      desvioCentavos: realizadoMesCentavos - previstoMesCentavos,
+      temOrcamento: categorias.length > 0,
+    });
+  }
+
+  const linhas: LinhaOrcamento[] = [...acumuladoPorCategoria.entries()]
+    .map(([codigo, v]) => {
+      const desvioCentavos = v.realizadoCentavos - v.previstoCentavos;
+      return {
+        codigo,
+        descricao: v.descricao,
+        previstoCentavos: v.previstoCentavos,
+        realizadoCentavos: v.realizadoCentavos,
         desvioCentavos,
         desvioPercentual:
-          previstoCentavos === 0
-            ? null
-            : Math.round((desvioCentavos / previstoCentavos) * 1000) / 10,
+          v.previstoCentavos === 0 ? null : Math.round((desvioCentavos / v.previstoCentavos) * 1000) / 10,
       };
     })
     .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
@@ -46,8 +79,8 @@ export function montarOrcamento(
   const totalRealizadoCentavos = linhas.reduce((soma, l) => soma + l.realizadoCentavos, 0);
 
   return {
-    ano,
-    mes,
+    periodo: { de, ate },
+    meses,
     linhas,
     totalPrevistoCentavos,
     totalRealizadoCentavos,

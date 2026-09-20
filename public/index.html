@@ -470,6 +470,15 @@
     <div class="rolagem"><table id="tabela-orcamento"></table></div>
   </div>
 
+  <div class="painel">
+    <h2>Previsto × realizado — mês a mês</h2>
+    <p class="nota" id="nota-or-mensal"></p>
+    <div class="grafico">
+      <canvas id="or-mensal"></canvas>
+      <div class="vazio oculto" id="or-mensal-vazio">Sem meses no período.</div>
+    </div>
+  </div>
+
   </section>
 </div>
 </main>
@@ -1121,6 +1130,55 @@ function renderizarEntradasSaidas() {
  * fatias vizinhas borram e a rosca deixa de responder qualquer pergunta. O que
  * sobra vira "Outros", nunca uma sétima cor inventada.
  */
+/**
+ * Previsto × realizado × desvio, um grupo de barras por mês do período —
+ * mesma composição do gráfico de fluxo de caixa (barras + linha), reaproveitada
+ * aqui. Duas cores da paleta categórica em vez de --serie-entrada/--serie-saida:
+ * não dá pra saber aqui se um mês "acima do previsto" é bom ou ruim (ver nota
+ * em src/orcamento/montar.ts), então a cor não pode sugerir isso.
+ */
+function renderizarOrcamentoMensal() {
+  const or = dados.orcamento;
+  if (!or || or.meses.length === 0) return semDados('or-mensal');
+  alternarVazio('or-mensal', false);
+
+  const comOrcamento = or.meses.filter((m) => m.temOrcamento).length;
+  $('nota-or-mensal').textContent =
+    or.meses.length === 1
+      ? 'Um mês só no período — amplie o período para comparar entre meses.'
+      : `${or.meses.length} meses no período; ${comOrcamento} com orçamento cadastrado na Omie.`;
+
+  desenhar('or-mensal', {
+    data: {
+      labels: or.meses.map((m) => `${MESES[Number(m.chave.slice(5)) - 1]}/${m.chave.slice(2, 4)}`),
+      datasets: [
+        { type: 'bar', label: 'Previsto', data: or.meses.map((m) => m.previstoCentavos), backgroundColor: categorica(0) },
+        { type: 'bar', label: 'Realizado', data: or.meses.map((m) => m.realizadoCentavos), backgroundColor: categorica(1) },
+        {
+          type: 'line',
+          label: 'Desvio',
+          data: or.meses.map((m) => m.desvioCentavos),
+          borderColor: cor('--texto'),
+          backgroundColor: cor('--texto'),
+          borderWidth: 2,
+          borderDash: [4, 3],
+          pointRadius: 3,
+          tension: 0.25,
+        },
+      ],
+    },
+    options: {
+      ...BASE,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: cor('--suave'), boxWidth: 12, boxHeight: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${moeda(c.raw)}` } },
+      },
+      scales: { x: eixoCategoria(), y: eixoValor(false) },
+    },
+  });
+}
+
 function renderizarRosca() {
   const folhas = folhasDoLado(dados.dre, true);
   if (folhas.length === 0) return semDados('g-rosca');
@@ -1420,26 +1478,26 @@ const NOMES_MES = [
 ];
 
 /**
- * A Omie não aceita período livre no orçamento de caixa, só mês/ano fechado —
- * diferente do resto da tela. Usa o mês do fim do período selecionado (`até`),
- * que é o mais recente, em vez de abrir um segundo seletor de data só para
- * esta aba.
+ * Mesmo período de cliente/de/até das outras abas. Por baixo, a rota chama a
+ * Omie um mês fechado por vez (ela não aceita período livre no orçamento de
+ * caixa) e soma — quanto mais meses no período, mais chamadas à Omie, então
+ * um período de um ano demora mais que um de um mês. É limitação da própria
+ * Omie, não desta tela.
  */
 async function carregarOrcamento() {
   const slug = $('cliente').value;
+  const de = $('de').value;
   const ate = $('ate').value;
 
   if (!slug) return mostrarErro('Nenhum cliente selecionado.');
-  if (!ate) return mostrarErro('Informe o período.');
-
-  const [ano, mes] = ate.split('-').map(Number);
+  if (!de || !ate) return mostrarErro('Informe o período.');
 
   limparErro();
   $('carregar').disabled = true;
   $('carregar').textContent = 'Carregando...';
 
   try {
-    dados.orcamento = await api(`/clientes/${slug}/orcamento?ano=${ano}&mes=${mes}`);
+    dados.orcamento = await api(`/clientes/${slug}/orcamento?de=${de}&ate=${ate}`);
     renderizarOrcamento();
   } catch (e) {
     mostrarErro(e.message);
@@ -1449,36 +1507,44 @@ async function carregarOrcamento() {
   }
 }
 
+function rotuloPeriodoOrcamento(or) {
+  if (or.meses.length === 1) return `${NOMES_MES[Number(or.meses[0].chave.slice(5)) - 1]} de ${or.meses[0].chave.slice(0, 4)}`;
+  const primeiro = or.meses[0].chave;
+  const ultimo = or.meses[or.meses.length - 1].chave;
+  return `${NOMES_MES[Number(primeiro.slice(5)) - 1]}/${primeiro.slice(2, 4)} a ${NOMES_MES[Number(ultimo.slice(5)) - 1]}/${ultimo.slice(2, 4)}`;
+}
+
 function renderizarOrcamento() {
   const or = dados.orcamento;
-  const rotuloPeriodo = `${NOMES_MES[or.mes - 1]} de ${or.ano}`;
+  const rotulo = rotuloPeriodoOrcamento(or);
 
-  $('or-periodo').textContent = rotuloPeriodo;
+  $('or-periodo').textContent = rotulo;
   $('or-previsto').textContent = moeda(or.totalPrevistoCentavos);
   $('or-realizado').textContent = moeda(or.totalRealizadoCentavos);
   $('or-desvio').textContent = moeda(or.totalDesvioCentavos);
 
   if (or.linhas.length === 0) {
-    $('or-periodo-vazio').textContent = rotuloPeriodo;
+    $('or-periodo-vazio').textContent = rotulo;
     $('aviso-orcamento-vazio').classList.remove('oculto');
     $('tabela-orcamento').innerHTML = '';
-    return;
+  } else {
+    $('aviso-orcamento-vazio').classList.add('oculto');
+    $('tabela-orcamento').innerHTML = `
+      <thead><tr><th>Categoria</th><th class="num">Previsto</th><th class="num">Realizado</th><th class="num">Desvio</th><th class="num">Desvio %</th></tr></thead>
+      <tbody>${or.linhas
+        .map(
+          (l) => `<tr>
+            <td>${l.descricao}</td>
+            <td class="num">${moeda(l.previstoCentavos)}</td>
+            <td class="num">${moeda(l.realizadoCentavos)}</td>
+            <td class="num">${moeda(l.desvioCentavos)}</td>
+            <td class="num">${l.desvioPercentual === null ? '—' : l.desvioPercentual.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'}</td>
+          </tr>`,
+        )
+        .join('')}</tbody>`;
   }
-  $('aviso-orcamento-vazio').classList.add('oculto');
 
-  $('tabela-orcamento').innerHTML = `
-    <thead><tr><th>Categoria</th><th class="num">Previsto</th><th class="num">Realizado</th><th class="num">Desvio</th><th class="num">Desvio %</th></tr></thead>
-    <tbody>${or.linhas
-      .map(
-        (l) => `<tr>
-          <td>${l.descricao}</td>
-          <td class="num">${moeda(l.previstoCentavos)}</td>
-          <td class="num">${moeda(l.realizadoCentavos)}</td>
-          <td class="num">${moeda(l.desvioCentavos)}</td>
-          <td class="num">${l.desvioPercentual === null ? '—' : l.desvioPercentual.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'}</td>
-        </tr>`,
-      )
-      .join('')}</tbody>`;
+  if (typeof Chart !== 'undefined') renderizarOrcamentoMensal();
 }
 
 // ---------- Registro de gráficos ----------
@@ -1703,27 +1769,33 @@ async function carregarFinanceiro() {
  * última resposta evita bater na API (e na Omie) só para mudar de cor.
  */
 function redesenhar() {
-  if (!dados.dre) return;
-
   // A matriz é HTML puro: não depende do Chart.js e por isso vem antes.
-  for (const g of GRAFICOS) {
-    if (g.tabela && visiveis.has(g.id)) g.desenhar();
+  if (dados.dre) {
+    for (const g of GRAFICOS) {
+      if (g.tabela && visiveis.has(g.id)) g.desenhar();
+    }
   }
 
   // Sem rede até o CDN, a página inteira continua útil: os cartões, a matriz e a
   // tabela do DRE já estão preenchidos. Só os gráficos faltam, e vale dizer isso
   // em vez de deixar um "Chart is not defined" na tela.
   if (typeof Chart === 'undefined') {
-    mostrarErro(
-      'Os gráficos não carregaram: a biblioteca Chart.js não pôde ser baixada. ' +
-        'Os números dos cartões e das tabelas continuam válidos.',
-    );
+    if (dados.dre) {
+      mostrarErro(
+        'Os gráficos não carregaram: a biblioteca Chart.js não pôde ser baixada. ' +
+          'Os números dos cartões e das tabelas continuam válidos.',
+      );
+    }
     return;
   }
 
-  for (const g of GRAFICOS) {
-    if (!g.tabela && visiveis.has(g.id)) g.desenhar();
+  if (dados.dre) {
+    for (const g of GRAFICOS) {
+      if (!g.tabela && visiveis.has(g.id)) g.desenhar();
+    }
   }
+
+  if (dados.orcamento) renderizarOrcamentoMensal();
 }
 
 $('carregar').addEventListener('click', () => void carregar());
